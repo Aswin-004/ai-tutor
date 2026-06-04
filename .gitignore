@@ -1,0 +1,31 @@
+# Environment variables — never commit secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+
+# ChromaDB persistent storage
+chroma_db/
+
+# Temp PDF files created during upload processing
+temp_*.pdf
+
+# VS Code
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude Code workspace
+.claude/
+
+# Generated reports
+session_analysis_report.md
