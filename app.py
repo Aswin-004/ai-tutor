@@ -488,11 +488,20 @@ async def chat(
             dropoff_block = tmp.dropoff_warning(user_model, chat_topic if "chat_topic" in dir() else None)
             memory_context = "\n".join(filter(None, [frustration_block, dropoff_block]))
 
+        # Agentic mode: env var AGENTIC_CHAT=1 enables tool-calling
+        use_agentic = os.getenv("AGENTIC_CHAT", "0") == "1"
+
         chat_start = datetime.utcnow()
-        chat_result = await session.chat(
-            body.message, server_history, decision=decision,
-            memory_context=memory_context,
-        )
+        if use_agentic:
+            chat_result = await session.agentic_chat(
+                body.message, server_history, decision=decision,
+                memory_context=memory_context,
+            )
+        else:
+            chat_result = await session.chat(
+                body.message, server_history, decision=decision,
+                memory_context=memory_context,
+            )
         response = chat_result["response"]
         emotion = chat_result["emotion"]
         now = datetime.utcnow()
@@ -851,6 +860,86 @@ async def submit_feedback(
 
     logger.info("Feedback '%s' recorded for user %s", body.feedback_type, user_id)
     return {"message": "Feedback recorded"}
+
+
+@app.post("/voice/transcribe")
+@limiter.limit("10/minute")
+async def transcribe_voice(
+    request: Request,
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_active_user),
+):
+    """Transcribe a voice recording and detect emotional tone using Gemini.
+
+    Accepts: audio/webm, audio/wav, audio/mp4, audio/ogg (browser MediaRecorder formats).
+    Returns: { transcript, tone, emotion }
+    """
+    ALLOWED_AUDIO = {"audio/webm", "audio/wav", "audio/mp4", "audio/ogg", "audio/mpeg"}
+    content_type = file.content_type or ""
+    if not any(content_type.startswith(t) for t in ALLOWED_AUDIO):
+        raise HTTPException(status_code=400, detail="Unsupported audio format")
+
+    audio_bytes = await file.read()
+    if len(audio_bytes) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Audio file too large (max 5MB)")
+    if len(audio_bytes) < 100:
+        raise HTTPException(status_code=400, detail="Audio file too small")
+
+    import base64
+    from google.genai import types as genai_types
+    from core import client as gemini_client
+
+    audio_b64 = base64.b64encode(audio_bytes).decode()
+
+    prompt = (
+        "Listen to this audio and do TWO things:\n"
+        "1. Transcribe exactly what was said.\n"
+        "2. Describe the speaker's tone in one word: "
+        "confident / hesitant / frustrated / excited / neutral\n\n"
+        "Respond in this exact format:\n"
+        "TRANSCRIPT: <what was said>\n"
+        "TONE: <one word>"
+    )
+
+    try:
+        response = await gemini_client.aio.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=[
+                {"role": "user", "parts": [
+                    {"inline_data": {"mime_type": content_type, "data": audio_b64}},
+                    {"text": prompt},
+                ]}
+            ],
+        )
+        raw = response.text.strip()
+    except Exception as exc:
+        logger.error("voice transcription failed: %s", exc)
+        raise HTTPException(status_code=500, detail="Transcription failed")
+
+    # Parse structured response
+    transcript, tone = "", "neutral"
+    for line in raw.splitlines():
+        if line.startswith("TRANSCRIPT:"):
+            transcript = line.replace("TRANSCRIPT:", "").strip()
+        elif line.startswith("TONE:"):
+            tone = line.replace("TONE:", "").strip().lower()
+
+    if not transcript:
+        raise HTTPException(status_code=422, detail="Could not transcribe audio")
+
+    # Map Gemini tone → our emotion labels
+    tone_to_emotion = {
+        "frustrated": "frustrated", "hesitant": "confused",
+        "confident": "confident",   "excited": "excited",
+        "neutral": "neutral",
+    }
+    emotion = tone_to_emotion.get(tone, "neutral")
+
+    logger.info(
+        "voice: user=%s tone=%s emotion=%s transcript_len=%d",
+        str(current_user["_id"]), tone, emotion, len(transcript),
+    )
+    return {"transcript": transcript, "tone": tone, "emotion": emotion}
 
 
 @app.post("/heartbeat")

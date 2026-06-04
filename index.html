@@ -2162,6 +2162,7 @@
                             <div class="chat-messages" id="chat-messages"></div>
                             <div class="chat-input">
                                 <input type="text" id="chat-input" placeholder="Ask me anything..." autocomplete="off">
+                                <button id="mic-btn" title="Voice input" style="margin-right:6px;background:var(--surface-2,#2a2a3e);border:none;border-radius:50%;width:40px;height:40px;cursor:pointer;color:var(--text-secondary,#aaa);font-size:1rem;transition:all .2s;"><i class="fas fa-microphone"></i></button>
                                 <button id="send-btn"><i class="fas fa-paper-plane"></i></button>
                             </div>
                         </div>
@@ -3106,6 +3107,71 @@
     sendBtn.addEventListener('click', sendMessage);
     chatInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') sendMessage();
+    });
+
+    // ── Voice input ───────────────────────────────────────────────────────
+    const micBtn = document.getElementById('mic-btn');
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let isRecording = false;
+
+    micBtn.addEventListener('click', async () => {
+        if (isRecording) {
+            mediaRecorder.stop();
+            return;
+        }
+        if (!navigator.mediaDevices) {
+            showNotification('Microphone not supported in this browser', 'error');
+            return;
+        }
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            audioChunks = [];
+            mediaRecorder = new MediaRecorder(stream);
+
+            mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+
+            mediaRecorder.onstop = async () => {
+                isRecording = false;
+                micBtn.innerHTML = '<i class="fas fa-microphone"></i>';
+                micBtn.style.color = '';
+                stream.getTracks().forEach(t => t.stop());
+
+                const blob = new Blob(audioChunks, { type: 'audio/webm' });
+                const formData = new FormData();
+                formData.append('file', blob, 'voice.webm');
+
+                micBtn.disabled = true;
+                micBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                try {
+                    const res = await fetch('/voice/transcribe', {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                        body: formData,
+                    });
+                    if (!res.ok) throw new Error('Transcription failed');
+                    const data = await res.json();
+                    chatInput.value = data.transcript;
+                    chatInput.focus();
+                    if (data.emotion && data.emotion !== 'neutral') {
+                        showNotification(`Tone detected: ${data.tone}`, 'info');
+                    }
+                } catch (err) {
+                    showNotification('Could not transcribe audio', 'error');
+                } finally {
+                    micBtn.disabled = false;
+                    micBtn.innerHTML = '<i class="fas fa-microphone"></i>';
+                }
+            };
+
+            mediaRecorder.start();
+            isRecording = true;
+            micBtn.innerHTML = '<i class="fas fa-stop"></i>';
+            micBtn.style.color = '#e74c3c';
+            showNotification('Recording... click mic again to stop', 'info');
+        } catch (err) {
+            showNotification('Microphone access denied', 'error');
+        }
     });
 
     async function clearChatHistory() {

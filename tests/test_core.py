@@ -166,6 +166,11 @@ def _make_roadmap_json(n: int = 1) -> str:
     ])
 
 
+def _patch_empty_vdb(system) -> None:
+    """Make the system's ChromaDB collection report 0 chunks so query_db returns '' immediately."""
+    system.vector_db.collection.count.return_value = 0
+
+
 @pytest.mark.asyncio
 async def test_generate_roadmap_returns_list():
     profile = {"level": "Beginner", "learning_style": "Visual", "subject": "Python"}
@@ -173,6 +178,7 @@ async def test_generate_roadmap_returns_list():
          patch("core.safe_generate", new=AsyncMock(return_value=_make_roadmap_json(5))), \
          patch("core.get_jina_embeddings", new=AsyncMock(return_value=[])):
         system = LearningSystem(user_id=1, profile=profile)
+        _patch_empty_vdb(system)
         result = await system.generate_roadmap()
     assert isinstance(result, list)
     assert result[0]["module"] == "Module 0"
@@ -214,6 +220,7 @@ async def test_generate_roadmap_beginner_gets_5_steps_in_prompt():
          patch("core.safe_generate", new=AsyncMock(side_effect=capture)), \
          patch("core.get_jina_embeddings", new=AsyncMock(return_value=[])):
         system = LearningSystem(user_id=2, profile=profile)
+        _patch_empty_vdb(system)
         await system.generate_roadmap()
 
     assert "5-step" in captured[0]
@@ -232,6 +239,7 @@ async def test_generate_roadmap_advanced_gets_9_steps_in_prompt():
          patch("core.safe_generate", new=AsyncMock(side_effect=capture)), \
          patch("core.get_jina_embeddings", new=AsyncMock(return_value=[])):
         system = LearningSystem(user_id=3, profile=profile)
+        _patch_empty_vdb(system)
         await system.generate_roadmap()
 
     assert "9-step" in captured[0]
@@ -250,6 +258,7 @@ async def test_generate_roadmap_practical_style_in_prompt():
          patch("core.safe_generate", new=AsyncMock(side_effect=capture)), \
          patch("core.get_jina_embeddings", new=AsyncMock(return_value=[])):
         system = LearningSystem(user_id=4, profile=profile)
+        _patch_empty_vdb(system)
         await system.generate_roadmap()
 
     assert "hands-on projects" in captured[0].lower() or "practical" in captured[0].lower()
@@ -268,6 +277,7 @@ async def test_generate_roadmap_includes_weak_topics_in_prompt():
          patch("core.safe_generate", new=AsyncMock(side_effect=capture)), \
          patch("core.get_jina_embeddings", new=AsyncMock(return_value=[])):
         system = LearningSystem(user_id=5, profile=profile)
+        _patch_empty_vdb(system)
         system.weak_topics = ["backpropagation", "gradient descent"]
         await system.generate_roadmap()
 
@@ -283,6 +293,7 @@ async def test_generate_roadmap_raises_on_ai_fallback():
          patch("core.safe_generate", new=AsyncMock(return_value=AI_FALLBACK)), \
          patch("core.get_jina_embeddings", new=AsyncMock(return_value=[])):
         system = LearningSystem(user_id=6, profile=profile)
+        _patch_empty_vdb(system)
         with pytest.raises(RuntimeError, match="AI service unavailable"):
             await system.generate_roadmap()
 
@@ -294,5 +305,6 @@ async def test_generate_roadmap_raises_on_invalid_json():
          patch("core.safe_generate", new=AsyncMock(return_value="not json at all")), \
          patch("core.get_jina_embeddings", new=AsyncMock(return_value=[])):
         system = LearningSystem(user_id=7, profile=profile)
+        _patch_empty_vdb(system)
         with pytest.raises(RuntimeError, match="invalid JSON"):
             await system.generate_roadmap()
