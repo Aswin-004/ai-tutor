@@ -21,3 +21,8 @@ async def init_indexes():
     await db.learning_events.create_index("user_id")
     await db.learning_events.create_index("created_at")
     await db.user_models.create_index("user_id", unique=True)
+    await db.analytics_events.create_index("user_id")
+    await db.analytics_events.create_index("event")
+    await db.analytics_events.create_index("created_at")
+    await db.explanation_failures.create_index("user_id")
+    await db.explanation_failures.create_index("topic")
