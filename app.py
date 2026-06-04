@@ -670,6 +670,15 @@ async def submit_quiz(
     current_user: dict = Depends(get_current_active_user),
 ):
     user_id = str(current_user["_id"])
+
+    if body.total_questions <= 0:
+        raise HTTPException(status_code=400, detail="total_questions must be > 0")
+    if body.score < 0 or body.score > body.total_questions:
+        raise HTTPException(
+            status_code=400,
+            detail=f"score must be between 0 and {body.total_questions}",
+        )
+
     subject = current_user.get("current_subject", "general")
     subject_data = current_user.get("subjects", {}).get(subject, {
         "weak_topics": [], "strong_topics": [], "proficiency_score": 0,
@@ -969,7 +978,10 @@ async def heartbeat(current_user: dict = Depends(get_current_active_user)):
         await asyncio.gather(
             db.users.update_one(
                 {"_id": current_user["_id"]},
-                {"$set": {"last_active": now}, "$inc": {"engagement_score": 1}},
+                {
+                    "$set": {"last_active": now},
+                    "$inc": {f"subjects.{subject}.engagement_score": 1},
+                },
             ),
             db.learning_events.insert_one({
                 "type": "heartbeat",
@@ -1038,10 +1050,14 @@ async def analytics_overview(
 
 
 @app.get("/quiz/history")
-async def get_quiz_history(current_user: dict = Depends(get_current_active_user)):
+async def get_quiz_history(
+    subject: str = None,
+    current_user: dict = Depends(get_current_active_user),
+):
     user_id = str(current_user["_id"])
+    active_subject = subject or current_user.get("current_subject", "general")
     performances = await db.quiz_performance.find(
-        {"user_id": user_id}
+        {"user_id": user_id, "subject": active_subject}
     ).sort("created_at", -1).to_list(None)
 
     return {
@@ -1049,6 +1065,7 @@ async def get_quiz_history(current_user: dict = Depends(get_current_active_user)
             {
                 "id": str(p["_id"]),
                 "topic": p["topic"],
+                "subject": p.get("subject", active_subject),
                 "score": p["score"],
                 "total_questions": p["total_questions"],
                 "percentage": round((p["score"] / p["total_questions"]) * 100) if p.get("total_questions", 0) > 0 else 0,
