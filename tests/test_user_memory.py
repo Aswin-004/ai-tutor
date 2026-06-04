@@ -192,6 +192,7 @@ async def test_chat_passes_memory_context_to_prompt():
          patch("core.safe_generate", new=AsyncMock(side_effect=capture)), \
          patch("core.get_jina_embeddings", new=AsyncMock(return_value=[])):
         system = LearningSystem(user_id=1, profile=profile)
+        system.vector_db.collection.count.return_value = 0
         await system.chat(
             "explain recursion",
             memory_context="Student previously abandoned recursion.",

@@ -369,8 +369,42 @@ class VectorDBManager:
 
         return {"status": "success", "chunks_added": len(chunks)}
 
+    def _bm25_rank(self, query: str, candidates: List[str]) -> List[str]:
+        """Rank candidates by BM25 keyword score (descending)."""
+        try:
+            from rank_bm25 import BM25Okapi
+        except ImportError:
+            return candidates
+
+        if not candidates:
+            return candidates
+
+        tokenized = [doc.lower().split() for doc in candidates]
+        bm25 = BM25Okapi(tokenized)
+        scores = bm25.get_scores(query.lower().split())
+        ranked = sorted(zip(candidates, scores), key=lambda x: x[1], reverse=True)
+        return [doc for doc, _ in ranked]
+
+    def _reciprocal_rank_fusion(
+        self,
+        dense_list: List[str],
+        sparse_list: List[str],
+        k: int = 60,
+    ) -> List[str]:
+        """Merge two ranked lists using Reciprocal Rank Fusion (RRF).
+
+        Each document gets score = Σ 1/(rank + k) across both lists.
+        Higher score = more relevant in the merged ranking.
+        """
+        scores: dict = {}
+        for rank, doc in enumerate(dense_list):
+            scores[doc] = scores.get(doc, 0.0) + 1.0 / (rank + k)
+        for rank, doc in enumerate(sparse_list):
+            scores[doc] = scores.get(doc, 0.0) + 1.0 / (rank + k)
+        return sorted(scores, key=lambda d: scores[d], reverse=True)
+
     async def query_db(self, query: str, n_results: Optional[int] = None) -> str:
-        """Query the vector database for relevant context.
+        """Hybrid retrieval: cosine similarity (dense) + BM25 (sparse), merged via RRF.
 
         n_results=None → auto-select: 3 for short queries, 6 for long ones.
         Pass an explicit int to override (e.g. 5 for roadmap generation).
@@ -381,51 +415,59 @@ class VectorDBManager:
         if n_results is None:
             n_results = 3 if len(query) < 50 else 6
 
+        pool = min(n_results * 3, self.collection.count())
+
         query_embeddings = await get_jina_embeddings([query], task="retrieval.query")
         if not query_embeddings:
             return ""
 
+        # Dense retrieval — cosine similarity via ChromaDB
         results = self.collection.query(
             query_embeddings=query_embeddings,
-            n_results=min(n_results, self.collection.count())
+            n_results=pool,
         )
-
         if not (results and results["documents"] and results["documents"][0]):
             return ""
 
-        docs = results["documents"][0]
+        dense_ranked = results["documents"][0]
 
-        # Re-rank by keyword overlap so exact-term matches surface first;
-        # ties preserve the original cosine-similarity order.
-        query_words = set(query.lower().split())
-        docs.sort(
-            key=lambda d: len(query_words & set(d.lower().split())),
-            reverse=True
+        # Sparse retrieval — BM25 over the same dense pool
+        sparse_ranked = self._bm25_rank(query, dense_ranked)
+
+        # Merge with RRF and take top-k
+        fused = self._reciprocal_rank_fusion(dense_ranked, sparse_ranked)
+        selected = fused[:n_results]
+
+        logger.info(
+            "hybrid_rag: dense=%d sparse=%d fused=%d selected=%d",
+            len(dense_ranked), len(sparse_ranked), len(fused), len(selected),
         )
-
-        return "\n\n---\n\n".join(docs)
+        return "\n\n---\n\n".join(selected)
 
     async def query_db_chunks(self, query: str, n_results: int) -> List[str]:
-        """Return chunk strings ordered by cosine similarity (most similar first).
+        """Hybrid chunk retrieval — returns top-n chunks via RRF.
 
         n_results is required; the caller decides the pool size.
         """
         if self.collection.count() == 0:
             return []
 
+        pool = min(n_results + 3, self.collection.count())
         query_embeddings = await get_jina_embeddings([query], task="retrieval.query")
         if not query_embeddings:
             return []
 
         results = self.collection.query(
             query_embeddings=query_embeddings,
-            n_results=min(n_results, self.collection.count())
+            n_results=pool,
         )
-
         if not (results and results["documents"] and results["documents"][0]):
             return []
 
-        return results["documents"][0]
+        dense_ranked = results["documents"][0]
+        sparse_ranked = self._bm25_rank(query, dense_ranked)
+        fused = self._reciprocal_rank_fusion(dense_ranked, sparse_ranked)
+        return fused[:n_results]
 
     def delete_document(self, filename: str) -> int:
         """Delete all vector chunks belonging to a document. Returns count removed."""
@@ -853,6 +895,157 @@ STUDENT'S QUESTION: {query}
         )
         response = await self._generate_response(prompt)
         return {"response": response, "emotion": emotion}
+
+    async def agentic_chat(
+        self,
+        query: str,
+        history: List[str] = None,
+        decision: Optional[Dict] = None,
+        memory_context: str = "",
+    ) -> dict:
+        """Agentic chat using Gemini native function-calling.
+
+        Gemini decides which tools to call before answering:
+          - search_documents(query)  — retrieves relevant chunks from ChromaDB
+          - get_weak_topics()        — returns the student's current weak areas
+          - get_quiz_summary()       — returns recent quiz performance
+
+        Falls back to standard chat() if tool-calling fails.
+        Returns same shape as chat(): {response, emotion}
+        """
+        from google.genai import types as genai_types
+
+        emotion = detect_emotion(query)
+
+        tool_declarations = [
+            genai_types.FunctionDeclaration(
+                name="search_documents",
+                description=(
+                    "Search the student's uploaded study materials for relevant content. "
+                    "Use this when the question relates to uploaded documents or specific course material."
+                ),
+                parameters=genai_types.Schema(
+                    type="OBJECT",
+                    properties={
+                        "query": genai_types.Schema(
+                            type="STRING",
+                            description="What to search for in the documents",
+                        )
+                    },
+                    required=["query"],
+                ),
+            ),
+            genai_types.FunctionDeclaration(
+                name="get_weak_topics",
+                description=(
+                    "Get the list of topics this student is currently struggling with. "
+                    "Use this to tailor explanations toward known weak areas."
+                ),
+                parameters=genai_types.Schema(type="OBJECT", properties={}),
+            ),
+            genai_types.FunctionDeclaration(
+                name="get_quiz_summary",
+                description=(
+                    "Get a short summary of the student's recent quiz performance. "
+                    "Use this when the student asks about their progress or when you need "
+                    "to calibrate difficulty."
+                ),
+                parameters=genai_types.Schema(type="OBJECT", properties={}),
+            ),
+        ]
+
+        tools = [genai_types.Tool(function_declarations=tool_declarations)]
+
+        # ── Build initial system + user message ────────────────────────────
+        emotion_block = ""
+        if emotion != "neutral":
+            tone_guide = EMOTION_TONE_GUIDE.get(emotion, "")
+            if tone_guide:
+                emotion_block = f"\nEMOTION — {emotion.upper()}: {tone_guide}\n"
+
+        memory_block = f"\nLONG-TERM MEMORY:\n{memory_context}\n" if memory_context else ""
+        history_str = "\n".join((history or [])[-6:])
+
+        system_prompt = (
+            f"{self.system_instruction}"
+            f"{memory_block}{emotion_block}\n"
+            "You have tools available. Use them when they would genuinely improve your answer. "
+            "Do not call tools for simple greetings or questions you can answer from expertise alone."
+        )
+
+        messages = [
+            {"role": "user", "parts": [{"text": f"{system_prompt}\n\n"
+                                                  f"CONVERSATION:\n{history_str}\n\n"
+                                                  f"STUDENT: {query}"}]}
+        ]
+
+        # ── Agentic loop — max 3 tool calls ────────────────────────────────
+        for step in range(3):
+            try:
+                response = await client.aio.models.generate_content(
+                    model=MODEL_NAME,
+                    contents=messages,
+                    config=genai_types.GenerateContentConfig(
+                        tools=tools,
+                        tool_config=genai_types.ToolConfig(
+                            function_calling_config=genai_types.FunctionCallingConfig(
+                                mode="AUTO"
+                            )
+                        ),
+                    ),
+                )
+            except Exception as exc:
+                logger.warning("agentic_chat: tool call failed step=%d — %s", step, exc)
+                break
+
+            part = response.candidates[0].content.parts[0] if response.candidates else None
+            if part is None:
+                break
+
+            # Check for function call
+            fn = getattr(part, "function_call", None)
+            if fn is None:
+                # Final answer
+                final_text = getattr(part, "text", "").strip()
+                if final_text:
+                    logger.info("agentic_chat: completed in %d step(s)", step + 1)
+                    return {"response": final_text, "emotion": emotion}
+                break
+
+            # Execute the tool
+            logger.info("agentic_chat: step=%d calling tool=%s", step, fn.name)
+            tool_result = ""
+            if fn.name == "search_documents":
+                search_q = fn.args.get("query", query)
+                tool_result = await self.vector_db.query_db(search_q, n_results=5)
+                tool_result = tool_result or "No relevant documents found."
+            elif fn.name == "get_weak_topics":
+                tool_result = (
+                    f"Weak topics: {', '.join(self.weak_topics)}"
+                    if self.weak_topics else "No weak topics identified yet."
+                )
+            elif fn.name == "get_quiz_summary":
+                tool_result = (
+                    f"Student has {len(self.weak_topics)} identified weak area(s): "
+                    f"{', '.join(self.weak_topics) or 'none'}. "
+                    f"Proficiency level: {self.profile.get('level', 'Intermediate')}."
+                )
+
+            # Feed result back to the model
+            messages.append({"role": "model", "parts": [part]})
+            messages.append({
+                "role": "user",
+                "parts": [{
+                    "function_response": {
+                        "name": fn.name,
+                        "response": {"result": tool_result},
+                    }
+                }],
+            })
+
+        # ── Fallback to standard chat ───────────────────────────────────────
+        logger.warning("agentic_chat: falling back to standard chat()")
+        return await self.chat(query, history, decision, memory_context)
 
     async def generate_quiz(self, topic: str) -> List[Dict]:
         """Generate a dynamic multiple-choice quiz using Gemini."""
