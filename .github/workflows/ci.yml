@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "feature/**"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Set test environment variables
+        run: |
+          echo "SECRET_KEY=ci-test-secret-key-32-chars-min!!" >> $GITHUB_ENV
+          echo "JINA_API_KEY=test-jina-key" >> $GITHUB_ENV
+          echo "GOOGLE_API_KEY=test-google-key" >> $GITHUB_ENV
+          echo "MONGO_URL=mongodb://localhost:27017" >> $GITHUB_ENV
+          echo "MONGO_DB_NAME=ai_tutor_test" >> $GITHUB_ENV
+
+      - name: Run tests
+        run: pytest tests/test_auth.py tests/test_core.py -v --tb=short
+
+  lint:
+    name: Lint Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install ruff
+        run: pip install ruff
+
+      - name: Run ruff linter
+        run: ruff check . --exclude .venv,venv --ignore E501
