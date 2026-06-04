@@ -2210,7 +2210,7 @@
                             </div>
                             <div class="chat-messages" id="chat-messages"></div>
                             <div class="chat-input">
-                                <input type="text" id="chat-input" placeholder="Ask me anything..." autocomplete="off">
+                                <input type="text" id="chat-input" placeholder="Ask me anything..." autocomplete="off" maxlength="2000">
                                 <button id="mic-btn" title="Voice input" style="margin-right:6px;background:var(--surface-2,#2a2a3e);border:none;border-radius:50%;width:40px;height:40px;cursor:pointer;color:var(--text-secondary,#aaa);font-size:1rem;transition:all .2s;"><i class="fas fa-microphone"></i></button>
                                 <button id="send-btn"><i class="fas fa-paper-plane"></i></button>
                             </div>
@@ -2883,8 +2883,14 @@
 
     async function handleFiles(files) {
         for (const file of files) {
-            if (!file.name.toLowerCase().endsWith('.pdf')) {
-                showNotification('Only PDF files allowed', 'error');
+            const isPdf = file.name.toLowerCase().endsWith('.pdf') ||
+                          file.type === 'application/pdf';
+            if (!isPdf) {
+                showNotification(`"${escapeHtml(file.name)}" is not a PDF — only PDF files allowed`, 'error');
+                continue;
+            }
+            if (file.size > 10 * 1024 * 1024) {
+                showNotification(`"${escapeHtml(file.name)}" exceeds 10 MB limit`, 'error');
                 continue;
             }
 
@@ -3179,6 +3185,7 @@
     let isRecording = false;
 
     micBtn.addEventListener('click', async () => {
+        if (micBtn.disabled) return;            // guard against double-tap
         if (isRecording) {
             mediaRecorder.stop();
             return;
@@ -3233,6 +3240,10 @@
             micBtn.style.color = '#e74c3c';
             showNotification('Recording... click mic again to stop', 'info');
         } catch (err) {
+            isRecording = false;
+            micBtn.style.color = '';
+            micBtn.innerHTML = '<i class="fas fa-microphone"></i>';
+            micBtn.disabled = false;
             showNotification('Microphone access denied', 'error');
         }
     });
@@ -3756,6 +3767,7 @@
     async function switchSubject(subject) {
         if (subject === currentSubject) return;
         currentSubject = subject;
+        cachedWeakTopics = [];          // clear stale topics before fetch
         localStorage.setItem('currentSubject', subject);
 
         document.querySelectorAll('.subject-tab').forEach(t =>
