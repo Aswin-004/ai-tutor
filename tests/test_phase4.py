@@ -17,6 +17,8 @@ def _make_vdb():
         col = MagicMock()
         col.count = MagicMock(return_value=10)
         vdb.collection = col
+        vdb._bm25_index = None
+        vdb._bm25_docs = []
         return vdb
 
 

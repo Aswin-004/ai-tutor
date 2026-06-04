@@ -174,7 +174,7 @@ async def get_learning_session(user: dict) -> LearningSystem:
             session.weak_topics = weak_topics
             session.system_instruction = session._build_persona()
         else:
-            all_perf = await db.quiz_performance.find({"user_id": user_id}).to_list(None)
+            all_perf = await db.quiz_performance.find({"user_id": user_id}).sort("created_at", -1).limit(200).to_list(None)
             quiz_data = [
                 {"topic": p["topic"], "score": (p["score"] / p["total_questions"]) * 100}
                 for p in all_perf if p.get("total_questions", 0) > 0
@@ -404,7 +404,7 @@ async def upload_pdf(
 @app.get("/documents")
 async def get_documents(current_user: dict = Depends(get_current_active_user)):
     user_id = str(current_user["_id"])
-    docs = await db.documents.find({"user_id": user_id}).sort("uploaded_at", -1).to_list(None)
+    docs = await db.documents.find({"user_id": user_id}).sort("uploaded_at", -1).limit(100).to_list(None)
 
     return {
         "documents": [
@@ -720,7 +720,7 @@ async def submit_quiz(
     # Filter by subject so weak_topics are never mixed across domains
     all_perf = await db.quiz_performance.find(
         {"user_id": user_id, "subject": subject}
-    ).to_list(None)
+    ).limit(200).to_list(None)
     quiz_data = [
         {"topic": p["topic"], "score": (p["score"] / p["total_questions"]) * 100}
         for p in all_perf if p.get("total_questions", 0) > 0
@@ -1048,7 +1048,7 @@ async def analytics_overview(
         "user_id": user_id,
         "subject": subject,
         "created_at": {"$gte": now - timedelta(days=5)},
-    }).to_list(None)
+    }).limit(500).to_list(None)
 
     for ev in recent_events:
         day_key = ev["created_at"].strftime("%b %d")
@@ -1074,7 +1074,7 @@ async def get_quiz_history(
     active_subject = subject or current_user.get("current_subject", "general")
     performances = await db.quiz_performance.find(
         {"user_id": user_id, "subject": active_subject}
-    ).sort("created_at", -1).to_list(None)
+    ).sort("created_at", -1).limit(500).to_list(None)
 
     return {
         "history": [
