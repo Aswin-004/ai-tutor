@@ -1,6 +1,6 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, status, Request
 from fastapi.responses import HTMLResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Dict, Literal
 from datetime import datetime, timedelta
 import asyncio
@@ -74,20 +74,23 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 # CORS middleware — set ALLOWED_ORIGINS env var to comma-separated list for production
 _allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:8000,http://localhost:3000")
 ALLOWED_ORIGINS = [o.strip() for o in _allowed_origins.split(",") if o.strip()]
+_IS_PRODUCTION = os.getenv("ENVIRONMENT", "development").lower() == "production"
+
+if _IS_PRODUCTION and any("localhost" in o for o in ALLOWED_ORIGINS):
+    raise ValueError("localhost must not be in ALLOWED_ORIGINS in production. Set ALLOWED_ORIGINS env var.")
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 
 # Pydantic Models
 class ChatRequest(BaseModel):
-    message: str
-    # history removed — fetched server-side from DB
+    message: str = Field(..., min_length=1, max_length=5000)
 
 
 class PasswordChange(BaseModel):
@@ -104,7 +107,7 @@ class QuizSubmitRequest(BaseModel):
 
 
 class FeedbackRequest(BaseModel):
-    message: str
+    message: str = Field(..., max_length=2000)
     feedback_type: Literal["up", "down"]
 
 
@@ -112,6 +115,20 @@ class SubjectSwitch(BaseModel):
     subject: str
 
 _VALID_SUBJECTS = {"general", "DSA", "ML", "Math"}
+
+_EMPTY_SUBJECT: Dict = {
+    "weak_topics": [],
+    "strong_topics": [],
+    "proficiency_score": 0,
+    "engagement_score": 0,
+    "cumulative_score": 0.0,
+    "total_attempts": 0,
+}
+
+
+def _subject_data(user: dict, subject: str) -> dict:
+    """Return subject-scoped stats with safe defaults for new subjects."""
+    return dict(_EMPTY_SUBJECT, **user.get("subjects", {}).get(subject, {}))
 
 
 def _evict_stale_sessions() -> None:
@@ -151,13 +168,13 @@ async def get_learning_session(user: dict) -> LearningSystem:
         session.user_model = user_model
 
         subject = user.get("current_subject", "general")
-        subject_data = user.get("subjects", {}).get(subject, {})
+        subject_data = _subject_data(user, subject)
         weak_topics = subject_data.get("weak_topics") or user.get("weak_topics")
         if weak_topics:
             session.weak_topics = weak_topics
             session.system_instruction = session._build_persona()
         else:
-            all_perf = await db.quiz_performance.find({"user_id": user_id}).to_list(None)
+            all_perf = await db.quiz_performance.find({"user_id": user_id}).sort("created_at", -1).limit(200).to_list(None)
             quiz_data = [
                 {"topic": p["topic"], "score": (p["score"] / p["total_questions"]) * 100}
                 for p in all_perf if p.get("total_questions", 0) > 0
@@ -278,7 +295,9 @@ async def logout(current_user: dict = Depends(get_current_active_user)):
 
 
 @app.post("/auth/change-password")
+@limiter.limit("3/minute")
 async def change_password(
+    request: Request,
     body: PasswordChange,
     current_user: dict = Depends(get_current_active_user),
 ):
@@ -308,7 +327,9 @@ async def upload_pdf(
 ):
     session = await get_learning_session(current_user)
 
-    if not file.filename.lower().endswith('.pdf'):
+    # Sanitise filename — strip path components to prevent traversal attacks
+    safe_filename = os.path.basename(file.filename or "upload.pdf")
+    if not safe_filename.lower().endswith('.pdf'):
         raise HTTPException(status_code=400, detail="Only PDF files are allowed")
 
     contents = await file.read()
@@ -344,21 +365,21 @@ async def upload_pdf(
 
         full_text = "\n\n".join(text_parts)
 
-        result = await session.vector_db.add_document(full_text, file.filename)
+        result = await session.vector_db.add_document(full_text, safe_filename)
 
         if result["status"] == "error":
             raise HTTPException(status_code=500, detail=result["message"])
 
         await db.documents.insert_one({
             "user_id": str(current_user["_id"]),
-            "filename": file.filename,
+            "filename": safe_filename,
             "file_size": file_size,
             "chunks_count": result.get("chunks_added", 0),
             "uploaded_at": datetime.utcnow(),
         })
 
         await track(db, DOCUMENT_UPLOADED, user_id=str(current_user["_id"]), properties={
-            "filename": file.filename,
+            "filename": safe_filename,
             "pages": len(reader.pages),
             "chunks": result.get("chunks_added", 0),
             "file_size_kb": round(file_size / 1024, 1),
@@ -366,24 +387,33 @@ async def upload_pdf(
 
         return {
             "status": "success",
-            "filename": file.filename,
+            "filename": safe_filename,
             "pages_processed": len(reader.pages),
             "chunks_added": result.get("chunks_added", 0)
         }
 
     except HTTPException:
         raise
+    except MemoryError:
+        logger.error("PDF processing OOM: %s (size=%d)", safe_filename, file_size)
+        raise HTTPException(status_code=413, detail="PDF too large to process")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error processing PDF: {str(e)}")
+        logger.error("PDF processing failed: %s — %s", safe_filename, e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Error processing PDF")
     finally:
         if os.path.exists(file_location):
             os.remove(file_location)
 
 
 @app.get("/documents")
-async def get_documents(current_user: dict = Depends(get_current_active_user)):
+async def get_documents(
+    skip: int = 0,
+    limit: int = 50,
+    current_user: dict = Depends(get_current_active_user),
+):
+    limit = min(limit, 100)   # cap at 100 regardless of client request
     user_id = str(current_user["_id"])
-    docs = await db.documents.find({"user_id": user_id}).sort("uploaded_at", -1).to_list(None)
+    docs = await db.documents.find({"user_id": user_id}).sort("uploaded_at", -1).skip(skip).limit(limit).to_list(None)
 
     return {
         "documents": [
@@ -463,13 +493,11 @@ async def chat(
     user_id = str(current_user["_id"])
     session = await get_learning_session(current_user)
     subject = current_user.get("current_subject", "general")
-    subject_data = current_user.get("subjects", {}).get(subject, {
-        "weak_topics": [], "strong_topics": [], "proficiency_score": 0, "engagement_score": 0,
-    })
-    logger.info(
-        "[SUBJECT DEBUG] chat user_id=%s subject=%s weak=%s prof=%s",
+    subject_data = _subject_data(current_user, subject)
+    logger.debug(
+        "chat user_id=%s subject=%s weak_count=%d prof=%s",
         user_id, subject,
-        subject_data.get("weak_topics", []),
+        len(subject_data.get("weak_topics", [])),
         subject_data.get("proficiency_score", 0),
     )
 
@@ -680,14 +708,11 @@ async def submit_quiz(
         )
 
     subject = current_user.get("current_subject", "general")
-    subject_data = current_user.get("subjects", {}).get(subject, {
-        "weak_topics": [], "strong_topics": [], "proficiency_score": 0,
-        "engagement_score": 0, "cumulative_score": 0.0, "total_attempts": 0,
-    })
-    logger.info(
-        "[SUBJECT DEBUG] quiz_submit user_id=%s subject=%s weak=%s prof=%s",
+    subject_data = _subject_data(current_user, subject)
+    logger.debug(
+        "quiz_submit user_id=%s subject=%s weak_count=%d prof=%s",
         user_id, subject,
-        subject_data.get("weak_topics", []),
+        len(subject_data.get("weak_topics", [])),
         subject_data.get("proficiency_score", 0),
     )
 
@@ -704,7 +729,7 @@ async def submit_quiz(
     # Filter by subject so weak_topics are never mixed across domains
     all_perf = await db.quiz_performance.find(
         {"user_id": user_id, "subject": subject}
-    ).to_list(None)
+    ).limit(200).to_list(None)
     quiz_data = [
         {"topic": p["topic"], "score": (p["score"] / p["total_questions"]) * 100}
         for p in all_perf if p.get("total_questions", 0) > 0
@@ -1002,7 +1027,7 @@ async def analytics_overview(
     current_user: dict = Depends(get_current_active_user),
 ):
     user_id = str(current_user["_id"])
-    subject_data = current_user.get("subjects", {}).get(subject, {})
+    subject_data = _subject_data(current_user, subject)
 
     proficiency_score = round(subject_data.get("proficiency_score", 0))
     engagement_score = int(subject_data.get("engagement_score", 0))
@@ -1032,7 +1057,7 @@ async def analytics_overview(
         "user_id": user_id,
         "subject": subject,
         "created_at": {"$gte": now - timedelta(days=5)},
-    }).to_list(None)
+    }).limit(500).to_list(None)
 
     for ev in recent_events:
         day_key = ev["created_at"].strftime("%b %d")
@@ -1058,7 +1083,7 @@ async def get_quiz_history(
     active_subject = subject or current_user.get("current_subject", "general")
     performances = await db.quiz_performance.find(
         {"user_id": user_id, "subject": active_subject}
-    ).sort("created_at", -1).to_list(None)
+    ).sort("created_at", -1).limit(500).to_list(None)
 
     return {
         "history": [

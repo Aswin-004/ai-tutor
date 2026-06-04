@@ -323,6 +323,9 @@ class VectorDBManager:
             name=collection_name,
             metadata={"hnsw:space": "cosine"}
         )
+        # BM25 index cache — invalidated when documents are added or removed
+        self._bm25_index = None
+        self._bm25_docs: List[str] = []
 
     async def add_document(self, text: str, source: str) -> Dict:
         """Chunk and embed a document into the vector database."""
@@ -366,11 +369,17 @@ class VectorDBManager:
             metadatas=metadatas,
             ids=ids
         )
+        self._invalidate_bm25()
 
         return {"status": "success", "chunks_added": len(chunks)}
 
+    def _invalidate_bm25(self) -> None:
+        """Clear cached BM25 index when the collection changes."""
+        self._bm25_index = None
+        self._bm25_docs = []
+
     def _bm25_rank(self, query: str, candidates: List[str]) -> List[str]:
-        """Rank candidates by BM25 keyword score (descending)."""
+        """Rank candidates by BM25 score. Uses a cached index when possible."""
         try:
             from rank_bm25 import BM25Okapi
         except ImportError:
@@ -379,9 +388,13 @@ class VectorDBManager:
         if not candidates:
             return candidates
 
-        tokenized = [doc.lower().split() for doc in candidates]
-        bm25 = BM25Okapi(tokenized)
-        scores = bm25.get_scores(query.lower().split())
+        # Rebuild index only when the candidate set has changed
+        if self._bm25_index is None or self._bm25_docs != candidates:
+            tokenized = [doc.lower().split() for doc in candidates]
+            self._bm25_index = BM25Okapi(tokenized)
+            self._bm25_docs = candidates[:]
+
+        scores = self._bm25_index.get_scores(query.lower().split())
         ranked = sorted(zip(candidates, scores), key=lambda x: x[1], reverse=True)
         return [doc for doc, _ in ranked]
 
@@ -409,13 +422,14 @@ class VectorDBManager:
         n_results=None → auto-select: 3 for short queries, 6 for long ones.
         Pass an explicit int to override (e.g. 5 for roadmap generation).
         """
-        if self.collection.count() == 0:
+        col_size = self.collection.count()   # called once per query
+        if col_size == 0:
             return ""
 
         if n_results is None:
             n_results = 3 if len(query) < 50 else 6
 
-        pool = min(n_results * 3, self.collection.count())
+        pool = min(n_results * 3, col_size)
 
         query_embeddings = await get_jina_embeddings([query], task="retrieval.query")
         if not query_embeddings:
@@ -449,10 +463,11 @@ class VectorDBManager:
 
         n_results is required; the caller decides the pool size.
         """
-        if self.collection.count() == 0:
+        col_size = self.collection.count()   # called once per query
+        if col_size == 0:
             return []
 
-        pool = min(n_results + 3, self.collection.count())
+        pool = min(n_results + 3, col_size)
         query_embeddings = await get_jina_embeddings([query], task="retrieval.query")
         if not query_embeddings:
             return []
@@ -476,6 +491,7 @@ class VectorDBManager:
             ids_to_delete = existing.get("ids", [])
             if ids_to_delete:
                 self.collection.delete(ids=ids_to_delete)
+                self._invalidate_bm25()
             return len(ids_to_delete)
         except Exception as e:
             logger.error("VectorDB delete error: %s", e)
@@ -525,6 +541,7 @@ class LearningSystem:
             self.weak_topics = [t for t, s in avg_scores.items() if s < 60]
         else:
             n_clusters = min(3, len(topics))
+            # KMeans on < 50 topics takes ~microseconds; sync is acceptable here.
             kmeans = KMeans(n_clusters=n_clusters, n_init="auto", random_state=42)
             kmeans.fit(scores)
             min_cluster_idx = np.argmin(kmeans.cluster_centers_)
