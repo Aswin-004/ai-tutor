@@ -394,17 +394,26 @@ async def upload_pdf(
 
     except HTTPException:
         raise
+    except MemoryError:
+        logger.error("PDF processing OOM: %s (size=%d)", safe_filename, file_size)
+        raise HTTPException(status_code=413, detail="PDF too large to process")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error processing PDF: {str(e)}")
+        logger.error("PDF processing failed: %s — %s", safe_filename, e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Error processing PDF")
     finally:
         if os.path.exists(file_location):
             os.remove(file_location)
 
 
 @app.get("/documents")
-async def get_documents(current_user: dict = Depends(get_current_active_user)):
+async def get_documents(
+    skip: int = 0,
+    limit: int = 50,
+    current_user: dict = Depends(get_current_active_user),
+):
+    limit = min(limit, 100)   # cap at 100 regardless of client request
     user_id = str(current_user["_id"])
-    docs = await db.documents.find({"user_id": user_id}).sort("uploaded_at", -1).limit(100).to_list(None)
+    docs = await db.documents.find({"user_id": user_id}).sort("uploaded_at", -1).skip(skip).limit(limit).to_list(None)
 
     return {
         "documents": [
@@ -485,10 +494,10 @@ async def chat(
     session = await get_learning_session(current_user)
     subject = current_user.get("current_subject", "general")
     subject_data = _subject_data(current_user, subject)
-    logger.info(
-        "[SUBJECT DEBUG] chat user_id=%s subject=%s weak=%s prof=%s",
+    logger.debug(
+        "chat user_id=%s subject=%s weak_count=%d prof=%s",
         user_id, subject,
-        subject_data.get("weak_topics", []),
+        len(subject_data.get("weak_topics", [])),
         subject_data.get("proficiency_score", 0),
     )
 
@@ -700,10 +709,10 @@ async def submit_quiz(
 
     subject = current_user.get("current_subject", "general")
     subject_data = _subject_data(current_user, subject)
-    logger.info(
-        "[SUBJECT DEBUG] quiz_submit user_id=%s subject=%s weak=%s prof=%s",
+    logger.debug(
+        "quiz_submit user_id=%s subject=%s weak_count=%d prof=%s",
         user_id, subject,
-        subject_data.get("weak_topics", []),
+        len(subject_data.get("weak_topics", [])),
         subject_data.get("proficiency_score", 0),
     )
 

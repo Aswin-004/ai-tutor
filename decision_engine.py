@@ -12,9 +12,9 @@ def decide_next_step(user: dict, subject_data: dict) -> dict:
     proficiency: float = subject_data.get("proficiency_score", 0) / 100.0
     engagement_score: int = subject_data.get("engagement_score", 0)
 
-    logger.info(
-        "[SUBJECT DEBUG] decision_engine weak=%s prof=%.2f engagement=%d",
-        weak_topics, proficiency, engagement_score,
+    logger.debug(
+        "decision_engine weak_count=%d prof=%.2f engagement=%d",
+        len(weak_topics), proficiency, engagement_score,
     )
 
     next_topic = weak_topics[0] if weak_topics else None
