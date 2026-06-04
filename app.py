@@ -46,6 +46,9 @@ limiter = Limiter(key_func=get_remote_address)
 
 # Active learning sessions (in-memory cache)
 active_sessions: Dict[str, LearningSystem] = {}
+# Tracks when each session was last accessed for TTL eviction
+_session_last_access: Dict[str, datetime] = {}
+_SESSION_TTL_HOURS = 4
 
 
 @asynccontextmanager
@@ -111,9 +114,21 @@ class SubjectSwitch(BaseModel):
 _VALID_SUBJECTS = {"general", "DSA", "ML", "Math"}
 
 
+def _evict_stale_sessions() -> None:
+    """Remove sessions idle longer than _SESSION_TTL_HOURS."""
+    cutoff = datetime.utcnow() - timedelta(hours=_SESSION_TTL_HOURS)
+    stale = [uid for uid, ts in _session_last_access.items() if ts < cutoff]
+    for uid in stale:
+        active_sessions.pop(uid, None)
+        _session_last_access.pop(uid, None)
+    if stale:
+        logger.info("evicted %d stale session(s)", len(stale))
+
+
 # Helper function to get or create learning session
 async def get_learning_session(user: dict) -> LearningSystem:
     user_id = str(user["_id"])
+    _evict_stale_sessions()
     if user_id not in active_sessions:
         profile = {
             "username": user["username"],
@@ -150,6 +165,7 @@ async def get_learning_session(user: dict) -> LearningSystem:
             session.update_weak_topics(quiz_data)
 
         active_sessions[user_id] = session
+    _session_last_access[user_id] = datetime.utcnow()
     return active_sessions[user_id]
 
 
@@ -247,6 +263,7 @@ async def update_profile(
     user_id = str(current_user["_id"])
     if user_id in active_sessions:
         del active_sessions[user_id]
+        _session_last_access.pop(user_id, None)
 
     return mongo_user_to_response(updated_user)
 
@@ -256,6 +273,7 @@ async def logout(current_user: dict = Depends(get_current_active_user)):
     user_id = str(current_user["_id"])
     if user_id in active_sessions:
         del active_sessions[user_id]
+        _session_last_access.pop(user_id, None)
     return {"message": "Logged out successfully"}
 
 
@@ -275,6 +293,7 @@ async def change_password(
     user_id = str(current_user["_id"])
     if user_id in active_sessions:
         del active_sessions[user_id]
+        _session_last_access.pop(user_id, None)
     return {"message": "Password changed successfully"}
 
 
@@ -796,6 +815,7 @@ async def switch_subject(
     user_id = str(current_user["_id"])
     if user_id in active_sessions:
         del active_sessions[user_id]
+        _session_last_access.pop(user_id, None)
 
     now = datetime.utcnow()
     update: dict = {"$set": {"current_subject": subject, "last_active": now}}
