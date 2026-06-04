@@ -25,6 +25,12 @@ from auth import (
     ACCESS_TOKEN_EXPIRE_MINUTES, mongo_user_to_response
 )
 from core import LearningSystem, UserMemoryManager
+from analytics import (
+    track,
+    USER_SIGNED_UP, DOCUMENT_UPLOADED, QUESTION_ASKED,
+    QUIZ_COMPLETED, ROADMAP_GENERATED,
+)
+from scheduler import start_scheduler, stop_scheduler
 from decision_engine import decide_next_step
 from video_resources import get_video_recommendations
 
@@ -46,8 +52,10 @@ active_sessions: Dict[str, LearningSystem] = {}
 async def lifespan(_app: FastAPI):
     logger.info("AI Tutor API starting up")
     await init_indexes()
+    start_scheduler(db)
     yield
     logger.info("AI Tutor API shutting down")
+    stop_scheduler()
     active_sessions.clear()
 
 
@@ -189,6 +197,10 @@ async def register(request: Request, user_data: UserCreate):
         expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     )
 
+    await track(db, USER_SIGNED_UP, user_id=str(user["_id"]), properties={
+        "username": user["username"],
+    })
+
     return Token(
         access_token=access_token,
         token_type="bearer",
@@ -326,6 +338,13 @@ async def upload_pdf(
             "uploaded_at": datetime.utcnow(),
         })
 
+        await track(db, DOCUMENT_UPLOADED, user_id=str(current_user["_id"]), properties={
+            "filename": file.filename,
+            "pages": len(reader.pages),
+            "chunks": result.get("chunks_added", 0),
+            "file_size_kb": round(file_size / 1024, 1),
+        })
+
         return {
             "status": "success",
             "filename": file.filename,
@@ -399,6 +418,11 @@ async def generate_roadmap(request: Request, current_user: dict = Depends(get_cu
             {"_id": current_user["_id"]},
             {"$set": {f"subjects.{subject}.roadmap": roadmap}},
         )
+
+        await track(db, ROADMAP_GENERATED, user_id=str(current_user["_id"]), properties={
+            "subject": subject,
+            "steps": len(roadmap),
+        })
 
         logger.info("Roadmap generated for user %s subject=%s", str(current_user["_id"]), subject)
         return {"roadmap": roadmap}
@@ -536,6 +560,13 @@ async def chat(
             subject_data.get("weak_topics", []),
             subject_data.get("proficiency_score", 0) / 100.0,
         )
+
+        await track(db, QUESTION_ASKED, user_id=user_id, properties={
+            "subject": subject,
+            "emotion": emotion,
+            "topic": chat_topic,
+            "response_time_s": round(response_time, 2),
+        })
 
         return {"response": response, "emotion": emotion, "decision": decision, "videos": videos}
     except Exception as e:
@@ -690,6 +721,34 @@ async def submit_quiz(
             user_id, gather_err,
         )
 
+    await track(db, QUIZ_COMPLETED, user_id=user_id, properties={
+        "topic": body.topic,
+        "subject": subject,
+        "score_pct": round(correctness * 100, 1),
+        "proficiency_after": proficiency_score,
+    })
+
+    # Score < 40% means the preceding explanation didn't land — record it
+    if correctness < 0.4:
+        last_explanation = await db.chat_history.find_one(
+            {"user_id": user_id, "role": "assistant"},
+            sort=[("created_at", -1)],
+        )
+        if last_explanation:
+            await db.explanation_failures.insert_one({
+                "user_id": user_id,
+                "topic": body.topic,
+                "subject": subject,
+                "explanation": last_explanation["message"][:500],
+                "score_pct": round(correctness * 100, 1),
+                "source": "quiz",
+                "created_at": now,
+            })
+            logger.info(
+                "explanation_failure recorded user=%s topic=%s score=%.0f%%",
+                user_id, body.topic, correctness * 100,
+            )
+
     return {"message": "Quiz submitted", "weak_topics": weak_topics}
 
 
@@ -754,13 +813,43 @@ async def submit_feedback(
     body: FeedbackRequest,
     current_user: dict = Depends(get_current_active_user),
 ):
+    user_id = str(current_user["_id"])
+    subject = current_user.get("current_subject", "general")
+
+    # Fetch the last AI response and the emotion at that time so failures
+    # can be analyzed to find patterns in what doesn't work.
+    last_ai_msg = await db.chat_history.find_one(
+        {"user_id": user_id, "role": "assistant"},
+        sort=[("created_at", -1)],
+    )
+    last_event = await db.learning_events.find_one(
+        {"user_id": user_id, "type": "chat"},
+        sort=[("created_at", -1)],
+    )
+
     await db.feedback.insert_one({
-        "user_id": str(current_user["_id"]),
+        "user_id": user_id,
         "message": body.message,
         "feedback_type": body.feedback_type,
+        "last_ai_response": last_ai_msg["message"] if last_ai_msg else None,
+        "topic": last_event["topic"] if last_event else None,
+        "emotion_at_time": last_event["emotion"] if last_event else None,
+        "subject": subject,
         "created_at": datetime.utcnow(),
     })
-    logger.info("Feedback '%s' recorded for user %s", body.feedback_type, str(current_user["_id"]))
+
+    # If thumbs down — store as a failed explanation for the nightly analyzer
+    if body.feedback_type == "down" and last_ai_msg:
+        await db.explanation_failures.insert_one({
+            "user_id": user_id,
+            "topic": last_event["topic"] if last_event else None,
+            "subject": subject,
+            "explanation": last_ai_msg["message"][:500],
+            "emotion_at_time": last_event["emotion"] if last_event else None,
+            "created_at": datetime.utcnow(),
+        })
+
+    logger.info("Feedback '%s' recorded for user %s", body.feedback_type, user_id)
     return {"message": "Feedback recorded"}
 
 
