@@ -27,5 +27,13 @@ Thumbs.db
 # Claude Code workspace
 .claude/
 
+# Code review graph cache
+.code-review-graph/
+
+# Test cache
+.pytest_cache/
+.coverage
+htmlcov/
+
 # Generated reports
 session_analysis_report.md

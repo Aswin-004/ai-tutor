@@ -24,7 +24,7 @@ from auth import (
     change_user_password, get_current_active_user,
     ACCESS_TOKEN_EXPIRE_MINUTES, mongo_user_to_response
 )
-from core import LearningSystem
+from core import LearningSystem, UserMemoryManager
 from decision_engine import decide_next_step
 from video_resources import get_video_recommendations
 
@@ -113,12 +113,22 @@ async def get_learning_session(user: dict) -> LearningSystem:
             "subject": user.get("subject") or "General",
             "level": user.get("level") or "Intermediate",
             "learning_style": user.get("learning_style") or "Visual",
-            "goals": user.get("goals") or "Learn effectively"
+            "goals": user.get("goals") or "Learn effectively",
         }
+
+        # Load persistent user memory and enrich profile
+        memory_mgr = UserMemoryManager(user_id, db)
+        user_model = await memory_mgr.load()
+
+        if user_model.get("style_profile"):
+            profile["style_profile"] = user_model["style_profile"]
+
         session = LearningSystem(user_id, profile)
+        session.memory_mgr = memory_mgr
+        session.user_model = user_model
+
         subject = user.get("current_subject", "general")
         subject_data = user.get("subjects", {}).get(subject, {})
-        # Prefer subject-specific weak_topics; fall back to legacy root field
         weak_topics = subject_data.get("weak_topics") or user.get("weak_topics")
         if weak_topics:
             session.weak_topics = weak_topics
@@ -130,6 +140,7 @@ async def get_learning_session(user: dict) -> LearningSystem:
                 for p in all_perf if p.get("total_questions", 0) > 0
             ]
             session.update_weak_topics(quiz_data)
+
         active_sessions[user_id] = session
     return active_sessions[user_id]
 
@@ -442,8 +453,22 @@ async def chat(
     )
 
     try:
+        # Build memory context blocks for this request
+        memory_mgr = getattr(session, "memory_mgr", None)
+        user_model = getattr(session, "user_model", {})
+        memory_context = ""
+        if memory_mgr:
+            from core import UserMemoryManager as _UMM
+            tmp = _UMM(user_id, db)
+            frustration_block = tmp.frustration_summary(user_model)
+            dropoff_block = tmp.dropoff_warning(user_model, chat_topic if "chat_topic" in dir() else None)
+            memory_context = "\n".join(filter(None, [frustration_block, dropoff_block]))
+
         chat_start = datetime.utcnow()
-        chat_result = await session.chat(body.message, server_history, decision=decision)
+        chat_result = await session.chat(
+            body.message, server_history, decision=decision,
+            memory_context=memory_context,
+        )
         response = chat_result["response"]
         emotion = chat_result["emotion"]
         now = datetime.utcnow()
@@ -490,6 +515,22 @@ async def chat(
                 "chat parallel write failed user_id=%s op=chat_persist: %s",
                 user_id, gather_err,
             )
+
+        # Update persistent user memory (fire-and-forget, never blocks the response)
+        if memory_mgr:
+            try:
+                await memory_mgr.record_emotion(emotion, chat_topic, subject)
+
+                # Rebuild style profile once enough messages exist (async, background)
+                recent_msgs = await db.chat_history.find(
+                    {"user_id": user_id}
+                ).sort("created_at", -1).limit(30).to_list(None)
+                new_style = await memory_mgr.build_style_profile(list(reversed(recent_msgs)))
+                if new_style and new_style != session.profile.get("style_profile"):
+                    session.profile["style_profile"] = new_style
+                    session.system_instruction = session._build_persona()
+            except Exception as mem_err:
+                logger.warning("user memory update failed user_id=%s: %s", user_id, mem_err)
 
         videos = get_video_recommendations(
             subject_data.get("weak_topics", []),

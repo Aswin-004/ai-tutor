@@ -20,3 +20,4 @@ async def init_indexes():
     await db.feedback.create_index("user_id")
     await db.learning_events.create_index("user_id")
     await db.learning_events.create_index("created_at")
+    await db.user_models.create_index("user_id", unique=True)
