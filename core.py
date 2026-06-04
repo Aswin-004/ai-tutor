@@ -12,7 +12,10 @@ from sklearn.cluster import KMeans
 from typing import List, Dict, Optional, Tuple
 from google import genai
 from dotenv import load_dotenv
-from nlp_utils import preprocess_query, extract_topics, classify_intent, detect_math_query
+from nlp_utils import (
+    preprocess_query, extract_topics, classify_intent,
+    detect_math_query, detect_emotion, EMOTION_TONE_GUIDE,
+)
 from ai_service import safe_generate, AI_FALLBACK
 
 load_dotenv()
@@ -669,6 +672,7 @@ Respond with ONLY the JSON array, no additional text or markdown formatting."""
         decision: Optional[Dict],
         *,
         mode: TutorMode = TutorMode.HYBRID,
+        emotion: str = "neutral",
     ) -> str:
         """Assemble the full Gemini prompt, shaped by tutor mode and subject."""
         subject = self.profile.get("subject", "General")
@@ -712,6 +716,13 @@ Respond with ONLY the JSON array, no additional text or markdown formatting."""
                 f"(Use the student's question as context, but steer toward the above approach.)"
                 f"\nTone: {tone}\n{tone_instruction}\n"
             )
+
+        # ── Emotion-aware tone override ─────────────────────────────────────
+        emotion_block = ""
+        if emotion and emotion != "neutral":
+            tone_guide = EMOTION_TONE_GUIDE.get(emotion, "")
+            if tone_guide:
+                emotion_block = f"\nEMOTION DETECTED — {emotion.upper()}:\n{tone_guide}\n"
 
         # ── Subject style guide ─────────────────────────────────────────────
         style_hint = _SUBJECT_STYLE_GUIDE.get(subject.lower(), "")
@@ -770,7 +781,7 @@ Respond with ONLY the JSON array, no additional text or markdown formatting."""
             )
 
         prompt = f"""{self.system_instruction}
-DIFFICULTY GUIDANCE: {difficulty_instruction}{style_block}{adaptive_block}
+DIFFICULTY GUIDANCE: {difficulty_instruction}{emotion_block}{style_block}{adaptive_block}
 {mode_header}
 
 ---
@@ -799,13 +810,21 @@ STUDENT'S QUESTION: {query}
         """Call safe_generate and return the model text or the fallback string."""
         return await safe_generate(client, MODEL_NAME, prompt)
 
-    async def chat(self, query: str, history: List[str] = None, decision: Optional[Dict] = None) -> str:
-        """Process a chat message with adaptive RAG context."""
+    async def chat(self, query: str, history: List[str] = None, decision: Optional[Dict] = None) -> dict:
+        """Process a chat message with adaptive RAG context.
+
+        Returns a dict with 'response' (str) and 'emotion' (str) so callers
+        can store the detected emotion alongside the message.
+        """
         clean_query = preprocess_query(query)
         topics = extract_topics(query)
         intent = classify_intent(query)
+        emotion = detect_emotion(query)
 
-        logger.info("NLP intent=%s topics=%s clean_query=%s", intent, topics, clean_query)
+        logger.info(
+            "NLP intent=%s emotion=%s topics=%s clean_query=%s",
+            intent, emotion, topics, clean_query,
+        )
 
         context = await self._resolve_rag_context(query, clean_query, topics, intent, decision)
 
@@ -817,8 +836,9 @@ STUDENT'S QUESTION: {query}
         )
         logger.info("tutor_mode=%s has_context=%s", mode.value, bool(context))
 
-        prompt = self._build_prompt(query, context, history or [], decision, mode=mode)
-        return await self._generate_response(prompt)
+        prompt = self._build_prompt(query, context, history or [], decision, mode=mode, emotion=emotion)
+        response = await self._generate_response(prompt)
+        return {"response": response, "emotion": emotion}
 
     async def generate_quiz(self, topic: str) -> List[Dict]:
         """Generate a dynamic multiple-choice quiz using Gemini."""

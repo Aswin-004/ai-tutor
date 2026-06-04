@@ -178,6 +178,29 @@ async def test_generate_roadmap_returns_list():
     assert result[0]["module"] == "Module 0"
 
 
+# ── detect_emotion ────────────────────────────────────────────────────────────
+
+from nlp_utils import detect_emotion
+
+def test_emotion_frustrated():
+    assert detect_emotion("i dont get this at all") == "frustrated"
+
+def test_emotion_confused():
+    assert detect_emotion("im so confused about this") == "confused"
+
+def test_emotion_confident():
+    assert detect_emotion("oh i see that makes sense now") == "confident"
+
+def test_emotion_excited():
+    assert detect_emotion("wow this is so cool!!") == "excited"
+
+def test_emotion_disengaged_short():
+    assert detect_emotion("ok") == "disengaged"
+
+def test_emotion_neutral():
+    assert detect_emotion("explain binary search trees") == "neutral"
+
+
 @pytest.mark.asyncio
 async def test_generate_roadmap_beginner_gets_5_steps_in_prompt():
     captured = []
