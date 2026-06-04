@@ -1178,8 +1178,11 @@ class UserMemoryManager:
         if last_updated and (datetime.utcnow() - last_updated).days < 7:
             return doc.get("style_profile", "")
 
-        sample = [m["message"] for m in messages[:20] if m.get("role") == "user"]
-        if len(sample) < 10:
+        # Scan ALL passed messages for user turns so alternating conversation
+        # history doesn't starve the sample (bug: [:20] slice + role filter
+        # could yield < 10 user messages from a 30-msg window).
+        sample = [m["message"] for m in messages if m.get("role") == "user"]
+        if len(sample) < 8:
             return ""
 
         prompt = (

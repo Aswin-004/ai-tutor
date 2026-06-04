@@ -477,15 +477,28 @@ async def chat(
     )
 
     try:
-        # Build memory context blocks for this request
+        # Infer topic first — needed by memory context below
+        last_quiz = await db.quiz_performance.find_one(
+            {"user_id": user_id}, sort=[("created_at", -1)]
+        )
+        chat_topic = last_quiz["topic"] if last_quiz else None
+        if not chat_topic:
+            _stopwords = {
+                "what", "when", "where", "which", "about", "please", "could", "would",
+                "should", "explain", "tell", "help", "with", "this", "that", "have",
+                "does", "from", "will", "just", "some", "also",
+            }
+            _words = [w.lower().strip("?.,!") for w in body.message.split()]
+            _kw = [w for w in _words if len(w) > 4 and w not in _stopwords]
+            chat_topic = _kw[0] if _kw else None
+
+        # Build memory context (drop-off warning needs chat_topic defined above)
         memory_mgr = getattr(session, "memory_mgr", None)
         user_model = getattr(session, "user_model", {})
         memory_context = ""
         if memory_mgr:
-            from core import UserMemoryManager as _UMM
-            tmp = _UMM(user_id, db)
-            frustration_block = tmp.frustration_summary(user_model)
-            dropoff_block = tmp.dropoff_warning(user_model, chat_topic if "chat_topic" in dir() else None)
+            frustration_block = memory_mgr.frustration_summary(user_model)
+            dropoff_block = memory_mgr.dropoff_warning(user_model, chat_topic)
             memory_context = "\n".join(filter(None, [frustration_block, dropoff_block]))
 
         # Agentic mode: env var AGENTIC_CHAT=1 enables tool-calling
@@ -506,21 +519,6 @@ async def chat(
         emotion = chat_result["emotion"]
         now = datetime.utcnow()
         response_time = (now - chat_start).total_seconds()
-
-        # Infer topic: last quiz topic, else first meaningful keyword from message
-        last_quiz = await db.quiz_performance.find_one(
-            {"user_id": user_id}, sort=[("created_at", -1)]
-        )
-        chat_topic = last_quiz["topic"] if last_quiz else None
-        if not chat_topic:
-            _stopwords = {
-                "what", "when", "where", "which", "about", "please", "could", "would",
-                "should", "explain", "tell", "help", "with", "this", "that", "have",
-                "does", "from", "will", "just", "some", "also",
-            }
-            _words = [w.lower().strip("?.,!") for w in body.message.split()]
-            _kw = [w for w in _words if len(w) > 4 and w not in _stopwords]
-            chat_topic = _kw[0] if _kw else None
 
         try:
             await asyncio.gather(
@@ -557,7 +555,7 @@ async def chat(
                 # Rebuild style profile once enough messages exist (async, background)
                 recent_msgs = await db.chat_history.find(
                     {"user_id": user_id}
-                ).sort("created_at", -1).limit(30).to_list(None)
+                ).sort("created_at", -1).limit(60).to_list(None)
                 new_style = await memory_mgr.build_style_profile(list(reversed(recent_msgs)))
                 if new_style and new_style != session.profile.get("style_profile"):
                     session.profile["style_profile"] = new_style
