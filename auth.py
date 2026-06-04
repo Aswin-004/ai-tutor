@@ -9,7 +9,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
 import bcrypt
 from bson import ObjectId
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from dotenv import load_dotenv
 
 from mongo import db
@@ -20,7 +20,11 @@ load_dotenv()
 SECRET_KEY = os.getenv("SECRET_KEY")
 if not SECRET_KEY:
     raise ValueError("SECRET_KEY environment variable must be set — refusing to start without it")
+if len(SECRET_KEY) < 32:
+    raise ValueError("SECRET_KEY must be at least 32 characters (256 bits) for HS256 security")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
+if ALGORITHM != "HS256":
+    raise ValueError(f"Only HS256 is supported; got {ALGORITHM}")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440"))
 
 # Bearer token security
@@ -92,11 +96,11 @@ class UserResponse(BaseModel):
 
 
 class UserProfileUpdate(BaseModel):
-    full_name: Optional[str] = None
-    subject: Optional[str] = None
-    level: Optional[str] = None
-    learning_style: Optional[str] = None
-    goals: Optional[str] = None
+    full_name: Optional[str] = Field(None, max_length=100)
+    subject: Optional[str] = Field(None, max_length=50)
+    level: Optional[str] = Field(None, max_length=50)
+    learning_style: Optional[str] = Field(None, max_length=100)
+    goals: Optional[str] = Field(None, max_length=500)
 
 
 class Token(BaseModel):
