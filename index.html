@@ -2746,7 +2746,18 @@
         
         chatMessages.innerHTML = '';
         uploadedFiles.innerHTML = '';
-        
+
+        // Reset dashboard so it fully reinitialises on next login
+        _dashboardInitialised = false;
+
+        // Always return to Login tab (not Sign Up) after logout
+        document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.auth-form').forEach(f => f.classList.remove('active'));
+        const loginTab = document.querySelector('.auth-tab[data-form="login"]');
+        const loginForm = document.getElementById('login-form');
+        if (loginTab) loginTab.classList.add('active');
+        if (loginForm) loginForm.classList.add('active');
+
         showSection('auth');
         showNotification('Logged out successfully', 'info');
     }
