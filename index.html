@@ -1344,6 +1344,29 @@
         .subject-tab:hover { color: var(--text); }
         .subject-tab.active { color: #fff; }
 
+        /* Home tab action cards */
+        .home-action-card {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            padding: 20px 12px;
+            background: var(--surface, #1e1e2e);
+            border: 2px solid transparent;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: var(--text, #e0e0e0);
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+        .home-action-card:hover {
+            border-color: var(--primary, #6c63ff);
+            background: rgba(108,99,255,0.1);
+            transform: translateY(-2px);
+        }
+        .home-action-card i { font-size: 1.5rem; color: var(--primary, #6c63ff); }
+
         /* Subject card selector (profile setup) */
         .subject-cards {
             display: grid;
@@ -2179,7 +2202,10 @@
                     </div>
 
                     <div class="tabs">
-                        <button class="tab active" data-tab="chat">
+                        <button class="tab active" data-tab="home">
+                            <i class="fas fa-home"></i> Home
+                        </button>
+                        <button class="tab" data-tab="chat">
                             <i class="fas fa-comments"></i> Chat
                         </button>
                         <button class="tab" data-tab="roadmap">
@@ -2197,7 +2223,47 @@
                     </div>
 
                     <!-- Chat Tab -->
-                    <div class="tab-content active" id="chat-tab">
+                    <!-- Home Tab -->
+                    <div class="tab-content active" id="home-tab">
+                        <div style="padding:24px 8px;">
+                            <h2 id="home-greeting" style="margin-bottom:6px;font-size:1.5rem;">Welcome back! 👋</h2>
+                            <p id="home-subject-line" style="color:var(--text-secondary,#aaa);margin-bottom:24px;"></p>
+                            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px;margin-bottom:28px;">
+                                <button class="home-action-card" onclick="switchToTab('chat')">
+                                    <i class="fas fa-comments"></i>
+                                    <span>Start Chat</span>
+                                </button>
+                                <button class="home-action-card" onclick="document.getElementById('generate-roadmap-btn').click();switchToTab('roadmap')">
+                                    <i class="fas fa-route"></i>
+                                    <span>Learning Path</span>
+                                </button>
+                                <button class="home-action-card" onclick="switchToTab('quiz')">
+                                    <i class="fas fa-question-circle"></i>
+                                    <span>Take Quiz</span>
+                                </button>
+                                <button class="home-action-card" onclick="document.getElementById('upload-area').click()">
+                                    <i class="fas fa-file-upload"></i>
+                                    <span>Upload PDF</span>
+                                </button>
+                            </div>
+                            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
+                                <div style="background:var(--surface,#1e1e2e);border-radius:10px;padding:16px;text-align:center;">
+                                    <div style="font-size:1.6rem;font-weight:700;" id="home-docs">—</div>
+                                    <div style="font-size:0.8rem;color:var(--text-secondary,#aaa);">Documents</div>
+                                </div>
+                                <div style="background:var(--surface,#1e1e2e);border-radius:10px;padding:16px;text-align:center;">
+                                    <div style="font-size:1.6rem;font-weight:700;" id="home-msgs">—</div>
+                                    <div style="font-size:0.8rem;color:var(--text-secondary,#aaa);">Questions Asked</div>
+                                </div>
+                                <div style="background:var(--surface,#1e1e2e);border-radius:10px;padding:16px;text-align:center;">
+                                    <div style="font-size:1.6rem;font-weight:700;" id="home-chunks">—</div>
+                                    <div style="font-size:0.8rem;color:var(--text-secondary,#aaa);">Knowledge Chunks</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="tab-content" id="chat-tab">
                         <div class="chat-container">
                             <div class="chat-header">
                                 <h4><i class="fas fa-robot"></i> AI Tutor</h4>
@@ -2772,11 +2838,15 @@
     }
 
     // ==================== DASHBOARD ====================
+    let _dashboardInitialised = false;
+
     async function initDashboard() {
         if (!currentUser) {
             showSection('auth');
             return;
         }
+        if (_dashboardInitialised) return;
+        _dashboardInitialised = true;
 
         // Update UI with user info
         document.getElementById('display-name').textContent = currentUser.full_name || currentUser.username;
@@ -2790,11 +2860,25 @@
         document.getElementById('profile-style').value = currentUser.learning_style || '';
         document.getElementById('profile-goals').value = currentUser.goals || '';
 
-        // Load stats
+        // Populate home tab greeting
+        const firstName = (currentUser.full_name || currentUser.username || 'Student').split(' ')[0];
+        const subjectLabel = currentUser.subject || currentUser.current_subject || 'General';
+        const homeGreeting = document.getElementById('home-greeting');
+        const homeSubLine = document.getElementById('home-subject-line');
+        if (homeGreeting) homeGreeting.textContent = `Welcome back, ${firstName}! 👋`;
+        if (homeSubLine) homeSubLine.textContent = `Currently studying: ${subjectLabel}`;
+
+        // Load stats (sidebar + home tab)
         try {
             const stats = await apiRequest('/stats');
             document.getElementById('docs-count').textContent = stats.documents_count;
             document.getElementById('messages-count').textContent = stats.messages_count;
+            const homeD = document.getElementById('home-docs');
+            const homeM = document.getElementById('home-msgs');
+            const homeC = document.getElementById('home-chunks');
+            if (homeD) homeD.textContent = stats.documents_count;
+            if (homeM) homeM.textContent = stats.messages_count;
+            if (homeC) homeC.textContent = stats.chunks_count ?? '—';
         } catch (e) {
             console.log('Could not load stats:', e);
         }
@@ -2803,12 +2887,16 @@
         try {
             const docs = await apiRequest('/documents');
             uploadedFiles.innerHTML = '';
-            docs.documents.forEach(doc => {
-                const item = document.createElement('div');
-                item.className = 'file-item';
-                item.innerHTML = `<i class="fas fa-file-pdf"></i><span>${escapeHtml(doc.filename)}</span>`;
-                uploadedFiles.appendChild(item);
-            });
+            if (docs.documents.length === 0) {
+                uploadedFiles.innerHTML = '<p style="font-size:0.8rem;color:var(--text-secondary,#aaa);text-align:center;padding:12px 0;">No PDFs uploaded yet</p>';
+            } else {
+                docs.documents.forEach(doc => {
+                    const item = document.createElement('div');
+                    item.className = 'file-item';
+                    item.innerHTML = `<i class="fas fa-file-pdf"></i><span>${escapeHtml(doc.filename)}</span>`;
+                    uploadedFiles.appendChild(item);
+                });
+            }
         } catch (e) {
             console.log('Could not load documents:', e);
         }
@@ -2818,6 +2906,16 @@
             const rm = await apiRequest('/roadmap');
             if (rm.roadmap && rm.roadmap.length > 0) {
                 renderRoadmap(rm.roadmap);
+            } else {
+                const roadmapContent = document.getElementById('roadmap-content');
+                if (roadmapContent) {
+                    roadmapContent.innerHTML = `
+                        <div class="empty-state">
+                            <i class="fas fa-route"></i>
+                            <h4>No learning path yet</h4>
+                            <p>Click "Generate Learning Path" to create your personalised roadmap.</p>
+                        </div>`;
+                }
             }
         } catch (e) {
             console.log('Could not load roadmap:', e);
@@ -2830,6 +2928,8 @@
             history.messages.forEach(msg => {
                 addMessage(msg.message, msg.role, false);
             });
+            // Scroll to most recent message
+            chatMessages.scrollTop = chatMessages.scrollHeight;
         } catch (e) {
             console.log('Could not load chat history:', e);
         }
@@ -2851,6 +2951,14 @@
             tabContents.forEach(c => c.classList.remove('active'));
             tab.classList.add('active');
             document.getElementById(`${tab.dataset.tab}-tab`).classList.add('active');
+
+            // Reset quiz UI when navigating away so it starts fresh next visit
+            if (tab.dataset.tab !== 'quiz') {
+                const quizSetup = document.getElementById('quiz-setup');
+                const qContent = document.getElementById('quiz-content');
+                if (quizSetup) quizSetup.style.display = '';
+                if (qContent) { qContent.style.display = 'none'; qContent.innerHTML = ''; }
+            }
         });
     });
 
@@ -3050,8 +3158,8 @@
             feedbackMessages.set(msgId, content);
             feedbackHtml = `
                 <div class="feedback-buttons" data-id="${msgId}">
-                    <button class="feedback-btn" data-type="up" onclick="submitFeedback(this)" title="Helpful">👍</button>
-                    <button class="feedback-btn" data-type="down" onclick="submitFeedback(this)" title="Not helpful">👎</button>
+                    <button class="feedback-btn" data-type="up" title="Helpful">👍</button>
+                    <button class="feedback-btn" data-type="down" title="Not helpful">👎</button>
                 </div>`;
         }
 
@@ -3174,6 +3282,13 @@
     }
 
     sendBtn.addEventListener('click', sendMessage);
+
+    // Delegated feedback listener — one handler for all bubbles, no memory leak
+    chatMessages.addEventListener('click', (e) => {
+        const btn = e.target.closest('.feedback-btn');
+        if (btn) submitFeedback(btn);
+    });
+
     chatInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') sendMessage();
     });
