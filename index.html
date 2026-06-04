@@ -1344,6 +1344,56 @@
         .subject-tab:hover { color: var(--text); }
         .subject-tab.active { color: #fff; }
 
+        /* Home tab action cards */
+        .home-action-card {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            padding: 20px 12px;
+            background: var(--surface, #1e1e2e);
+            border: 2px solid transparent;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: var(--text, #e0e0e0);
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+        .home-action-card:hover {
+            border-color: var(--primary, #6c63ff);
+            background: rgba(108,99,255,0.1);
+            transform: translateY(-2px);
+        }
+        .home-action-card i { font-size: 1.5rem; color: var(--primary, #6c63ff); }
+
+        /* Subject card selector (profile setup) */
+        .subject-cards {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-top: 8px;
+        }
+        .subject-card {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+            padding: 16px 12px;
+            background: var(--surface, #1e1e2e);
+            border: 2px solid transparent;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+        }
+        .subject-card:hover { border-color: var(--primary, #6c63ff); background: rgba(108,99,255,0.08); }
+        .subject-card.selected { border-color: var(--primary, #6c63ff); background: rgba(108,99,255,0.15); }
+        .subject-card i { font-size: 1.6rem; color: var(--primary, #6c63ff); }
+        .subject-card span { font-weight: 600; font-size: 0.95rem; }
+        .subject-card small { font-size: 0.75rem; color: var(--text-secondary, #aaa); }
+        @media (max-width: 480px) { .subject-cards { grid-template-columns: repeat(2, 1fr); } }
+
         /* Action icon buttons */
         .subject-actions { display: flex; align-items: center; gap: 8px; }
 
@@ -1993,7 +2043,29 @@
                     <form id="profile-setup-form">
                         <div class="form-group">
                             <label><i class="fas fa-book"></i> What subject do you want to learn?</label>
-                            <input type="text" id="setup-subject" placeholder="e.g., Mathematics, Python, Physics" required>
+                            <div class="subject-cards" id="setup-subject-cards">
+                                <div class="subject-card" data-value="general" onclick="selectSetupSubject(this)">
+                                    <i class="fas fa-book-open"></i>
+                                    <span>General</span>
+                                    <small>Broad topics &amp; exploration</small>
+                                </div>
+                                <div class="subject-card" data-value="DSA" onclick="selectSetupSubject(this)">
+                                    <i class="fas fa-sitemap"></i>
+                                    <span>DSA</span>
+                                    <small>Data Structures &amp; Algorithms</small>
+                                </div>
+                                <div class="subject-card" data-value="ML" onclick="selectSetupSubject(this)">
+                                    <i class="fas fa-brain"></i>
+                                    <span>ML</span>
+                                    <small>Machine Learning &amp; AI</small>
+                                </div>
+                                <div class="subject-card" data-value="Math" onclick="selectSetupSubject(this)">
+                                    <i class="fas fa-square-root-alt"></i>
+                                    <span>Math</span>
+                                    <small>Mathematics &amp; Statistics</small>
+                                </div>
+                            </div>
+                            <input type="hidden" id="setup-subject" required>
                         </div>
                         <div class="form-group">
                             <label><i class="fas fa-layer-group"></i> What's your current level?</label>
@@ -2130,7 +2202,10 @@
                     </div>
 
                     <div class="tabs">
-                        <button class="tab active" data-tab="chat">
+                        <button class="tab active" data-tab="home">
+                            <i class="fas fa-home"></i> Home
+                        </button>
+                        <button class="tab" data-tab="chat">
                             <i class="fas fa-comments"></i> Chat
                         </button>
                         <button class="tab" data-tab="roadmap">
@@ -2148,7 +2223,47 @@
                     </div>
 
                     <!-- Chat Tab -->
-                    <div class="tab-content active" id="chat-tab">
+                    <!-- Home Tab -->
+                    <div class="tab-content active" id="home-tab">
+                        <div style="padding:24px 8px;">
+                            <h2 id="home-greeting" style="margin-bottom:6px;font-size:1.5rem;">Welcome back! 👋</h2>
+                            <p id="home-subject-line" style="color:var(--text-secondary,#aaa);margin-bottom:24px;"></p>
+                            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px;margin-bottom:28px;">
+                                <button class="home-action-card" onclick="switchToTab('chat')">
+                                    <i class="fas fa-comments"></i>
+                                    <span>Start Chat</span>
+                                </button>
+                                <button class="home-action-card" onclick="document.getElementById('generate-roadmap-btn').click();switchToTab('roadmap')">
+                                    <i class="fas fa-route"></i>
+                                    <span>Learning Path</span>
+                                </button>
+                                <button class="home-action-card" onclick="switchToTab('quiz')">
+                                    <i class="fas fa-question-circle"></i>
+                                    <span>Take Quiz</span>
+                                </button>
+                                <button class="home-action-card" onclick="document.getElementById('upload-area').click()">
+                                    <i class="fas fa-file-upload"></i>
+                                    <span>Upload PDF</span>
+                                </button>
+                            </div>
+                            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
+                                <div style="background:var(--surface,#1e1e2e);border-radius:10px;padding:16px;text-align:center;">
+                                    <div style="font-size:1.6rem;font-weight:700;" id="home-docs">—</div>
+                                    <div style="font-size:0.8rem;color:var(--text-secondary,#aaa);">Documents</div>
+                                </div>
+                                <div style="background:var(--surface,#1e1e2e);border-radius:10px;padding:16px;text-align:center;">
+                                    <div style="font-size:1.6rem;font-weight:700;" id="home-msgs">—</div>
+                                    <div style="font-size:0.8rem;color:var(--text-secondary,#aaa);">Questions Asked</div>
+                                </div>
+                                <div style="background:var(--surface,#1e1e2e);border-radius:10px;padding:16px;text-align:center;">
+                                    <div style="font-size:1.6rem;font-weight:700;" id="home-chunks">—</div>
+                                    <div style="font-size:0.8rem;color:var(--text-secondary,#aaa);">Knowledge Chunks</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="tab-content" id="chat-tab">
                         <div class="chat-container">
                             <div class="chat-header">
                                 <h4><i class="fas fa-robot"></i> AI Tutor</h4>
@@ -2161,7 +2276,7 @@
                             </div>
                             <div class="chat-messages" id="chat-messages"></div>
                             <div class="chat-input">
-                                <input type="text" id="chat-input" placeholder="Ask me anything..." autocomplete="off">
+                                <input type="text" id="chat-input" placeholder="Ask me anything..." autocomplete="off" maxlength="2000">
                                 <button id="mic-btn" title="Voice input" style="margin-right:6px;background:var(--surface-2,#2a2a3e);border:none;border-radius:50%;width:40px;height:40px;cursor:pointer;color:var(--text-secondary,#aaa);font-size:1rem;transition:all .2s;"><i class="fas fa-microphone"></i></button>
                                 <button id="send-btn"><i class="fas fa-paper-plane"></i></button>
                             </div>
@@ -2198,7 +2313,13 @@
                                 </div>
                                 <div class="form-group">
                                     <label>Subject</label>
-                                    <input type="text" id="profile-subject" placeholder="Subject to learn">
+                                    <select id="profile-subject">
+                                        <option value="">Select subject</option>
+                                        <option value="general">General</option>
+                                        <option value="DSA">DSA</option>
+                                        <option value="ML">ML</option>
+                                        <option value="Math">Math</option>
+                                    </select>
                                 </div>
                                 <div class="form-group">
                                     <label>Level</label>
@@ -2692,6 +2813,14 @@
         text.textContent = isIdle ? 'Idle' : 'Active';
     }
 
+    // ==================== SUBJECT CARD SELECTOR ====================
+    function selectSetupSubject(card) {
+        document.querySelectorAll('#setup-subject-cards .subject-card')
+            .forEach(c => c.classList.remove('selected'));
+        card.classList.add('selected');
+        document.getElementById('setup-subject').value = card.dataset.value;
+    }
+
     // ==================== SECTIONS ====================
     function showSection(name) {
         authSection.classList.remove('active');
@@ -2709,11 +2838,15 @@
     }
 
     // ==================== DASHBOARD ====================
+    let _dashboardInitialised = false;
+
     async function initDashboard() {
         if (!currentUser) {
             showSection('auth');
             return;
         }
+        if (_dashboardInitialised) return;
+        _dashboardInitialised = true;
 
         // Update UI with user info
         document.getElementById('display-name').textContent = currentUser.full_name || currentUser.username;
@@ -2722,16 +2855,30 @@
 
         // Update profile form
         document.getElementById('profile-fullname').value = currentUser.full_name || '';
-        document.getElementById('profile-subject').value = currentUser.subject || '';
+        document.getElementById('profile-subject').value = currentUser.subject || currentUser.current_subject || '';
         document.getElementById('profile-level').value = currentUser.level || '';
         document.getElementById('profile-style').value = currentUser.learning_style || '';
         document.getElementById('profile-goals').value = currentUser.goals || '';
 
-        // Load stats
+        // Populate home tab greeting
+        const firstName = (currentUser.full_name || currentUser.username || 'Student').split(' ')[0];
+        const subjectLabel = currentUser.subject || currentUser.current_subject || 'General';
+        const homeGreeting = document.getElementById('home-greeting');
+        const homeSubLine = document.getElementById('home-subject-line');
+        if (homeGreeting) homeGreeting.textContent = `Welcome back, ${firstName}! 👋`;
+        if (homeSubLine) homeSubLine.textContent = `Currently studying: ${subjectLabel}`;
+
+        // Load stats (sidebar + home tab)
         try {
             const stats = await apiRequest('/stats');
             document.getElementById('docs-count').textContent = stats.documents_count;
             document.getElementById('messages-count').textContent = stats.messages_count;
+            const homeD = document.getElementById('home-docs');
+            const homeM = document.getElementById('home-msgs');
+            const homeC = document.getElementById('home-chunks');
+            if (homeD) homeD.textContent = stats.documents_count;
+            if (homeM) homeM.textContent = stats.messages_count;
+            if (homeC) homeC.textContent = stats.chunks_count ?? '—';
         } catch (e) {
             console.log('Could not load stats:', e);
         }
@@ -2740,12 +2887,16 @@
         try {
             const docs = await apiRequest('/documents');
             uploadedFiles.innerHTML = '';
-            docs.documents.forEach(doc => {
-                const item = document.createElement('div');
-                item.className = 'file-item';
-                item.innerHTML = `<i class="fas fa-file-pdf"></i><span>${escapeHtml(doc.filename)}</span>`;
-                uploadedFiles.appendChild(item);
-            });
+            if (docs.documents.length === 0) {
+                uploadedFiles.innerHTML = '<p style="font-size:0.8rem;color:var(--text-secondary,#aaa);text-align:center;padding:12px 0;">No PDFs uploaded yet</p>';
+            } else {
+                docs.documents.forEach(doc => {
+                    const item = document.createElement('div');
+                    item.className = 'file-item';
+                    item.innerHTML = `<i class="fas fa-file-pdf"></i><span>${escapeHtml(doc.filename)}</span>`;
+                    uploadedFiles.appendChild(item);
+                });
+            }
         } catch (e) {
             console.log('Could not load documents:', e);
         }
@@ -2755,6 +2906,16 @@
             const rm = await apiRequest('/roadmap');
             if (rm.roadmap && rm.roadmap.length > 0) {
                 renderRoadmap(rm.roadmap);
+            } else {
+                const roadmapContent = document.getElementById('roadmap-content');
+                if (roadmapContent) {
+                    roadmapContent.innerHTML = `
+                        <div class="empty-state">
+                            <i class="fas fa-route"></i>
+                            <h4>No learning path yet</h4>
+                            <p>Click "Generate Learning Path" to create your personalised roadmap.</p>
+                        </div>`;
+                }
             }
         } catch (e) {
             console.log('Could not load roadmap:', e);
@@ -2767,6 +2928,8 @@
             history.messages.forEach(msg => {
                 addMessage(msg.message, msg.role, false);
             });
+            // Scroll to most recent message
+            chatMessages.scrollTop = chatMessages.scrollHeight;
         } catch (e) {
             console.log('Could not load chat history:', e);
         }
@@ -2788,6 +2951,14 @@
             tabContents.forEach(c => c.classList.remove('active'));
             tab.classList.add('active');
             document.getElementById(`${tab.dataset.tab}-tab`).classList.add('active');
+
+            // Reset quiz UI when navigating away so it starts fresh next visit
+            if (tab.dataset.tab !== 'quiz') {
+                const quizSetup = document.getElementById('quiz-setup');
+                const qContent = document.getElementById('quiz-content');
+                if (quizSetup) quizSetup.style.display = '';
+                if (qContent) { qContent.style.display = 'none'; qContent.innerHTML = ''; }
+            }
         });
     });
 
@@ -2820,8 +2991,14 @@
 
     async function handleFiles(files) {
         for (const file of files) {
-            if (!file.name.toLowerCase().endsWith('.pdf')) {
-                showNotification('Only PDF files allowed', 'error');
+            const isPdf = file.name.toLowerCase().endsWith('.pdf') ||
+                          file.type === 'application/pdf';
+            if (!isPdf) {
+                showNotification(`"${escapeHtml(file.name)}" is not a PDF — only PDF files allowed`, 'error');
+                continue;
+            }
+            if (file.size > 10 * 1024 * 1024) {
+                showNotification(`"${escapeHtml(file.name)}" exceeds 10 MB limit`, 'error');
                 continue;
             }
 
@@ -2981,8 +3158,8 @@
             feedbackMessages.set(msgId, content);
             feedbackHtml = `
                 <div class="feedback-buttons" data-id="${msgId}">
-                    <button class="feedback-btn" data-type="up" onclick="submitFeedback(this)" title="Helpful">👍</button>
-                    <button class="feedback-btn" data-type="down" onclick="submitFeedback(this)" title="Not helpful">👎</button>
+                    <button class="feedback-btn" data-type="up" title="Helpful">👍</button>
+                    <button class="feedback-btn" data-type="down" title="Not helpful">👎</button>
                 </div>`;
         }
 
@@ -3105,6 +3282,13 @@
     }
 
     sendBtn.addEventListener('click', sendMessage);
+
+    // Delegated feedback listener — one handler for all bubbles, no memory leak
+    chatMessages.addEventListener('click', (e) => {
+        const btn = e.target.closest('.feedback-btn');
+        if (btn) submitFeedback(btn);
+    });
+
     chatInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') sendMessage();
     });
@@ -3116,6 +3300,7 @@
     let isRecording = false;
 
     micBtn.addEventListener('click', async () => {
+        if (micBtn.disabled) return;            // guard against double-tap
         if (isRecording) {
             mediaRecorder.stop();
             return;
@@ -3144,9 +3329,9 @@
                 micBtn.disabled = true;
                 micBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
                 try {
-                    const res = await fetch('/voice/transcribe', {
+                    const res = await fetch(`${API_URL}/voice/transcribe`, {
                         method: 'POST',
-                        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                        headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` },
                         body: formData,
                     });
                     if (!res.ok) throw new Error('Transcription failed');
@@ -3170,6 +3355,10 @@
             micBtn.style.color = '#e74c3c';
             showNotification('Recording... click mic again to stop', 'info');
         } catch (err) {
+            isRecording = false;
+            micBtn.style.color = '';
+            micBtn.innerHTML = '<i class="fas fa-microphone"></i>';
+            micBtn.disabled = false;
             showNotification('Microphone access denied', 'error');
         }
     });
@@ -3693,6 +3882,7 @@
     async function switchSubject(subject) {
         if (subject === currentSubject) return;
         currentSubject = subject;
+        cachedWeakTopics = [];          // clear stale topics before fetch
         localStorage.setItem('currentSubject', subject);
 
         document.querySelectorAll('.subject-tab').forEach(t =>

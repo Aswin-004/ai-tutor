@@ -68,8 +68,11 @@ async def _run_improvement_pass(db) -> None:
                         user_id, rate * 100,
                     )
                 elif rate < 0.1 and user.get("auto_difficulty_override") == "easier":
-                    # Student is no longer struggling — remove override
                     changes["auto_difficulty_override"] = None
+            elif user.get("auto_difficulty_override") == "easier":
+                # No chat events this week — student is no longer actively struggling;
+                # clear the override so difficulty resets naturally on next session.
+                changes["auto_difficulty_override"] = None
 
             # ── 2. Stale roadmap check ─────────────────────────────────────
             subject_data = user.get("subjects", {}).get(subject, {})
