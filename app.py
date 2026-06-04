@@ -443,7 +443,9 @@ async def chat(
 
     try:
         chat_start = datetime.utcnow()
-        response = await session.chat(body.message, server_history, decision=decision)
+        chat_result = await session.chat(body.message, server_history, decision=decision)
+        response = chat_result["response"]
+        emotion = chat_result["emotion"]
         now = datetime.utcnow()
         response_time = (now - chat_start).total_seconds()
 
@@ -473,6 +475,7 @@ async def chat(
                     "type": "chat",
                     "topic": chat_topic,
                     "subject": subject,
+                    "emotion": emotion,
                     "correctness": None,
                     "response_time": response_time,
                     "created_at": now,
@@ -493,7 +496,7 @@ async def chat(
             subject_data.get("proficiency_score", 0) / 100.0,
         )
 
-        return {"response": response, "decision": decision, "videos": videos}
+        return {"response": response, "emotion": emotion, "decision": decision, "videos": videos}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
 

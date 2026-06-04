@@ -140,3 +140,103 @@ def classify_intent(text: str) -> str:
         return "comparison"
 
     return "concept"
+
+
+# ── Emotion detection ─────────────────────────────────────────────────────────
+
+_FRUSTRATION_SIGNALS = {
+    "dont get", "don't get", "doesn't make sense", "makes no sense",
+    "i give up", "this is hard", "i dont understand", "don't understand",
+    "still confused", "no idea", "stuck",
+    "not getting it", "ugh", "why is this", "what even", "skip this",
+    "this sucks", "too hard", "impossible", "never mind", "forget it",
+}
+_CONFIDENCE_SIGNALS = {
+    "i think i get it", "oh i see", "that makes sense", "makes sense now",
+    "got it", "i understand", "now i get", "oh wait", "i figured",
+    "so basically", "so that means", "ah okay", "i see so",
+}
+_EXCITEMENT_SIGNALS = {
+    "this is cool", "that's amazing", "wow", "oh wow", "so interesting",
+    "can we do more", "tell me more", "i want to learn", "love this",
+}
+_DISENGAGED_SIGNALS = {
+    "ok", "okay", "k", "sure", "fine", "yeah", "yep", "mm", "hmm", "whatever",
+}
+
+
+def detect_emotion(message: str) -> str:
+    """Detect the student's emotional state from their message.
+
+    Returns one of: frustrated | confused | confident | excited | disengaged | neutral
+
+    Rules are checked in priority order — frustration beats confusion beats excitement.
+    Message length is used as a secondary signal: very short messages suggest disengagement.
+    """
+    text = message.lower().strip()
+    word_count = len(text.split())
+
+    # Frustration — highest priority, needs immediate tone shift
+    if any(sig in text for sig in _FRUSTRATION_SIGNALS):
+        return "frustrated"
+
+    # Confusion — similar to frustration but milder; try a different explanation
+    confusion_words = {
+        "confused", "confusing", "confuse", "unclear", "huh", "what?",
+        "i don't follow", "dont follow", "lost me", "what do you mean",
+        "so confused", "am confused", "getting confused",
+    }
+    if any(w in text for w in confusion_words):
+        return "confused"
+
+    # Confidence / breakthrough
+    if any(sig in text for sig in _CONFIDENCE_SIGNALS):
+        return "confident"
+
+    # Excitement
+    if any(sig in text for sig in _EXCITEMENT_SIGNALS) or text.count("!") >= 2:
+        return "excited"
+
+    # Disengaged — very short replies or known filler words
+    if word_count <= 3 and text in _DISENGAGED_SIGNALS:
+        return "disengaged"
+
+    # Very short message (1-2 words) with no content = likely disengaged
+    if word_count <= 2 and not any(sig in text for sig in _CONFIDENCE_SIGNALS):
+        return "disengaged"
+
+    return "neutral"
+
+
+# Tone instructions injected into the Gemini prompt based on detected emotion.
+EMOTION_TONE_GUIDE: dict[str, str] = {
+    "frustrated": (
+        "IMPORTANT — Student is frustrated right now. "
+        "Do NOT repeat the same explanation. "
+        "Acknowledge briefly ('That's a tough one, let's try a different angle'), "
+        "then use a completely different analogy or real-world example. "
+        "Keep the response SHORT — 3-4 sentences max. No walls of text."
+    ),
+    "confused": (
+        "Student is confused. Slow down. "
+        "Break your explanation into numbered steps. "
+        "Use a concrete, everyday analogy before any technical terms. "
+        "End with one simple check question to see if they followed."
+    ),
+    "confident": (
+        "Student is getting it — they're in a good zone. "
+        "You can go slightly deeper or introduce the next logical concept. "
+        "Acknowledge their progress naturally ('Exactly right — now here's where it gets interesting')."
+    ),
+    "excited": (
+        "Student is excited and engaged. Match their energy. "
+        "Be enthusiastic, go a little deeper, connect to something even more interesting. "
+        "Ask a follow-up question to keep the momentum going."
+    ),
+    "disengaged": (
+        "Student seems disengaged or bored. "
+        "Do NOT give a long response. "
+        "Ask one short, interesting question or share one surprising fact related to the topic. "
+        "Make it interactive — get them talking again."
+    ),
+}
