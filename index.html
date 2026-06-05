@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Tutor - Your Personal Learning Assistant</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
@@ -16,18 +16,24 @@
     <style>
         :root {
             --primary: #6366f1;
-            --primary-dark: #4f46e5;
+            --primary-dark: #4338ca;
             --primary-light: #a5b4fc;
             --secondary: #10b981;
-            --background: #0f172a;
-            --surface: #1e293b;
-            --surface-light: #334155;
-            --text: #f1f5f9;
-            --text-muted: #94a3b8;
-            --border: #475569;
-            --error: #ef4444;
-            --warning: #f59e0b;
-            --success: #22c55e;
+            --accent: #2dd4bf;
+            --accent-glow: rgba(45, 212, 191, 0.18);
+            --background: #070d1a;
+            --surface: #0d1526;
+            --surface-2: #121e34;
+            --surface-light: #1c2a40;
+            --text: #eef2ff;
+            --text-muted: #8899bb;
+            --border: #1e2f4a;
+            --border-light: #2a3f5e;
+            --error: #f87171;
+            --warning: #fbbf24;
+            --success: #34d399;
+            --font-display: 'Syne', sans-serif;
+            --font-body: 'Plus Jakarta Sans', sans-serif;
         }
 
         * {
@@ -37,7 +43,7 @@
         }
 
         body {
-            font-family: 'Inter', sans-serif;
+            font-family: var(--font-body);
             background: var(--background);
             color: var(--text);
             min-height: 100vh;
@@ -62,9 +68,10 @@
             left: -50%;
             width: 200%;
             height: 200%;
-            background: radial-gradient(circle at 30% 20%, rgba(99, 102, 241, 0.1) 0%, transparent 50%),
-                        radial-gradient(circle at 70% 80%, rgba(16, 185, 129, 0.1) 0%, transparent 50%);
-            animation: float 20s ease-in-out infinite;
+            background: radial-gradient(circle at 20% 15%, rgba(99, 102, 241, 0.07) 0%, transparent 45%),
+                        radial-gradient(circle at 80% 85%, rgba(45, 212, 191, 0.05) 0%, transparent 40%),
+                        radial-gradient(circle at 60% 40%, rgba(67, 56, 202, 0.04) 0%, transparent 35%);
+            animation: float 25s ease-in-out infinite;
         }
 
         @keyframes float {
@@ -85,6 +92,10 @@
             padding: 40px 0;
         }
 
+        .header.hidden {
+            display: none;
+        }
+
         .logo {
             display: flex;
             align-items: center;
@@ -95,13 +106,16 @@
 
         .logo i {
             font-size: 3rem;
-            color: var(--primary);
+            color: var(--accent);
+            filter: drop-shadow(0 0 12px rgba(45, 212, 191, 0.5));
         }
 
         .logo h1 {
-            font-size: 2.5rem;
-            font-weight: 700;
-            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            font-family: var(--font-display);
+            font-size: 2.8rem;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            background: linear-gradient(135deg, #e0e7ff 0%, var(--primary-light) 40%, var(--accent) 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
@@ -110,6 +124,7 @@
         .tagline {
             color: var(--text-muted);
             font-size: 1.1rem;
+            letter-spacing: 0.02em;
         }
 
         /* Sections */
@@ -150,7 +165,7 @@
             border-radius: 20px;
             padding: 35px;
             border: 1px solid var(--border);
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            box-shadow: 0 20px 60px -10px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255,255,255,0.03);
         }
 
         .card-header {
@@ -159,7 +174,9 @@
         }
 
         .card-header h2 {
-            font-size: 1.75rem;
+            font-family: var(--font-display);
+            font-size: 1.85rem;
+            letter-spacing: -0.01em;
             margin-bottom: 10px;
         }
 
@@ -222,21 +239,21 @@
         .form-group textarea {
             width: 100%;
             padding: 14px 18px;
-            background: var(--surface-light);
-            border: 2px solid var(--border);
+            background: var(--surface-2);
+            border: 1px solid var(--border-light);
             border-radius: 12px;
             color: var(--text);
             font-size: 1rem;
-            font-family: inherit;
-            transition: all 0.3s ease;
+            font-family: var(--font-body);
+            transition: all 0.22s ease-out;
         }
 
         .form-group input:focus,
         .form-group select:focus,
         .form-group textarea:focus {
             outline: none;
-            border-color: var(--primary);
-            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.15);
         }
 
         .form-group textarea {
@@ -282,14 +299,16 @@
         }
 
         .btn-primary {
-            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
             color: white;
             width: 100%;
+            font-family: var(--font-body);
+            letter-spacing: 0.02em;
         }
 
         .btn-primary:hover {
             transform: translateY(-2px);
-            box-shadow: 0 10px 40px rgba(99, 102, 241, 0.3);
+            box-shadow: 0 10px 40px rgba(99, 102, 241, 0.35), 0 0 0 1px rgba(99,102,241,0.3);
         }
 
         .btn-secondary {
@@ -340,9 +359,9 @@
         /* Dashboard */
         .dashboard {
             display: grid;
-            grid-template-columns: 300px 1fr;
-            gap: 25px;
-            min-height: calc(100vh - 200px);
+            grid-template-columns: 320px 1fr;
+            gap: 28px;
+            min-height: calc(100vh - 60px);
         }
 
         @media (max-width: 900px) {
@@ -359,76 +378,110 @@
         }
 
         .profile-card {
-            background: var(--surface);
-            border-radius: 16px;
-            padding: 25px;
+            background: linear-gradient(160deg, var(--surface-2) 0%, var(--surface) 100%);
+            border-radius: 18px;
+            padding: 28px 24px;
             border: 1px solid var(--border);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .profile-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--primary), var(--accent));
+            border-radius: 18px 18px 0 0;
         }
 
         .profile-card .avatar {
-            width: 70px;
-            height: 70px;
-            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            width: 84px;
+            height: 84px;
+            background: linear-gradient(135deg, var(--primary-dark), var(--primary));
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            margin: 0 auto 15px;
-            font-size: 1.75rem;
+            margin: 0 auto 16px;
+            font-size: 2rem;
+            box-shadow: 0 0 0 3px var(--background), 0 0 0 5px var(--accent), 0 0 20px rgba(45,212,191,0.3);
+            transition: box-shadow 0.3s ease;
+        }
+
+        .profile-card .avatar:hover {
+            box-shadow: 0 0 0 3px var(--background), 0 0 0 5px var(--accent), 0 0 30px rgba(45,212,191,0.5);
         }
 
         .profile-card h3 {
             text-align: center;
+            font-family: var(--font-display);
+            font-size: 1.2rem;
+            font-weight: 700;
+            letter-spacing: -0.01em;
             margin-bottom: 5px;
         }
 
         .profile-card .email {
             text-align: center;
             color: var(--text-muted);
-            font-size: 0.85rem;
-            margin-bottom: 5px;
+            font-size: 0.82rem;
+            margin-bottom: 6px;
         }
 
         .profile-card .subject {
             text-align: center;
-            color: var(--primary-light);
-            font-size: 0.9rem;
-            margin-bottom: 15px;
+            color: var(--accent);
+            font-size: 0.88rem;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            margin-bottom: 16px;
         }
 
         .profile-card .stats {
             display: flex;
-            gap: 15px;
-            margin-top: 15px;
-            padding-top: 15px;
+            gap: 12px;
+            margin-top: 16px;
+            padding-top: 16px;
             border-top: 1px solid var(--border);
         }
 
         .stat {
             flex: 1;
             text-align: center;
+            padding: 10px 6px;
+            background: rgba(255,255,255,0.02);
+            border-radius: 10px;
+            border: 1px solid var(--border);
         }
 
         .stat-value {
-            font-size: 1.5rem;
+            font-family: var(--font-display);
+            font-size: 1.8rem;
             font-weight: 700;
-            color: var(--primary);
+            color: var(--accent);
+            line-height: 1;
         }
 
         .stat-label {
-            font-size: 0.75rem;
+            font-size: 0.72rem;
             color: var(--text-muted);
+            margin-top: 4px;
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
         }
 
         /* Upload Section — Premium */
         .upload-card {
-            background: var(--surface);
+            background: var(--surface-2);
             border-radius: 16px;
             padding: 20px;
             border: 1px solid var(--border);
             transition: border-color 0.25s;
         }
-        .upload-card:hover { border-color: rgba(99,102,241,0.35); }
+        .upload-card:hover { border-color: rgba(45,212,191,0.25); }
         .upload-card h4 {
             margin-bottom: 14px;
             display: flex;
@@ -529,39 +582,48 @@
         /* Tabs */
         .tabs {
             display: flex;
-            gap: 10px;
+            gap: 4px;
             background: var(--surface);
-            padding: 8px;
-            border-radius: 12px;
+            padding: 6px;
+            border-radius: 14px;
             border: 1px solid var(--border);
+            margin-bottom: 4px;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
         }
 
         .tab {
             flex: 1;
-            padding: 12px 20px;
+            padding: 13px 16px;
             border: none;
             background: transparent;
             color: var(--text-muted);
-            font-size: 0.95rem;
-            font-weight: 500;
-            border-radius: 8px;
+            font-size: 0.92rem;
+            font-weight: 600;
+            font-family: var(--font-body);
+            border-radius: 10px;
             cursor: pointer;
-            transition: all 0.3s ease;
-            font-family: inherit;
+            transition: all 0.22s ease;
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 8px;
+            gap: 7px;
+            position: relative;
+            letter-spacing: 0.01em;
         }
 
         .tab:hover {
             color: var(--text);
-            background: var(--surface-light);
+            background: rgba(255,255,255,0.04);
         }
 
         .tab.active {
-            background: var(--primary);
-            color: white;
+            background: rgba(99,102,241,0.12);
+            color: var(--primary-light);
+            box-shadow: inset 0 0 0 1px rgba(99,102,241,0.3);
+        }
+
+        .tab.active i {
+            color: var(--accent);
         }
 
         /* Tab Content */
@@ -585,6 +647,7 @@
             border: 1px solid var(--border);
             overflow: hidden;
             min-height: 500px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.3);
         }
 
         .chat-header {
@@ -678,7 +741,8 @@
 
         .chat-input input:focus {
             outline: none;
-            border-color: var(--primary);
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.12);
         }
 
         .chat-input button {
@@ -1292,7 +1356,8 @@
             align-items: center;
             justify-content: space-between;
             gap: 12px;
-            margin-bottom: 16px;
+            margin-bottom: 18px;
+            padding-top: 4px;
         }
 
         .subject-switcher {
@@ -1309,18 +1374,19 @@
             background: var(--surface);
             border: 1px solid var(--border);
             border-radius: 14px;
-            padding: 5px;
+            padding: 6px;
             gap: 2px;
             min-width: max-content;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
         }
 
         .subject-tab-indicator {
             position: absolute;
-            top: 5px;
-            bottom: 5px;
+            top: 6px;
+            bottom: 6px;
             border-radius: 9px;
-            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-            box-shadow: 0 2px 12px rgba(99,102,241,0.45);
+            background: linear-gradient(135deg, var(--accent) 0%, #0ea5e9 100%);
+            box-shadow: 0 2px 16px rgba(45, 212, 191, 0.4);
             transition: left 0.26s cubic-bezier(.4,0,.2,1), width 0.26s cubic-bezier(.4,0,.2,1);
             pointer-events: none;
             z-index: 0;
@@ -1329,43 +1395,65 @@
         .subject-tab {
             position: relative;
             z-index: 1;
-            padding: 9px 24px;
+            padding: 10px 28px;
             border: none;
             border-radius: 9px;
             background: transparent;
             color: var(--text-muted);
-            font-size: 0.9rem;
-            font-weight: 600;
+            font-size: 0.95rem;
+            font-weight: 700;
             cursor: pointer;
             transition: color 0.2s;
-            font-family: inherit;
+            font-family: var(--font-body);
             white-space: nowrap;
+            letter-spacing: 0.02em;
         }
         .subject-tab:hover { color: var(--text); }
-        .subject-tab.active { color: #fff; }
+        .subject-tab.active { color: #0a1628; }
 
         /* Home tab action cards */
         .home-action-card {
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 10px;
-            padding: 20px 12px;
-            background: var(--surface, #1e1e2e);
-            border: 2px solid transparent;
-            border-radius: 12px;
+            gap: 14px;
+            padding: 30px 18px;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: 16px;
             cursor: pointer;
-            transition: all 0.2s;
-            color: var(--text, #e0e0e0);
-            font-size: 0.9rem;
+            transition: all 0.25s cubic-bezier(.4,0,.2,1);
+            color: var(--text);
+            font-size: 1rem;
             font-weight: 600;
+            font-family: var(--font-body);
+            letter-spacing: 0.01em;
+            position: relative;
+            overflow: hidden;
+        }
+        .home-action-card::before {
+            content: '';
+            position: absolute;
+            bottom: 0; left: 0; right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, var(--accent), #0ea5e9);
+            transform: scaleX(0);
+            transform-origin: left;
+            transition: transform 0.3s ease;
         }
         .home-action-card:hover {
-            border-color: var(--primary, #6c63ff);
-            background: rgba(108,99,255,0.1);
-            transform: translateY(-2px);
+            border-color: var(--accent);
+            background: rgba(45,212,191,0.05);
+            transform: translateY(-4px);
+            box-shadow: 0 12px 32px rgba(45,212,191,0.12), 0 0 0 1px rgba(45,212,191,0.2);
         }
-        .home-action-card i { font-size: 1.5rem; color: var(--primary, #6c63ff); }
+        .home-action-card:hover::before { transform: scaleX(1); }
+        .home-action-card i {
+            font-size: 2.2rem;
+            color: var(--accent);
+            transition: transform 0.25s ease;
+        }
+        .home-action-card:hover i { transform: scale(1.1); }
 
         /* Subject card selector (profile setup) */
         .subject-cards {
@@ -1871,6 +1959,29 @@
             .badge { font-size: 0.65rem; padding: 2px 8px; }
         }
 
+        /* ==================== ACCESSIBILITY & MOTION ==================== */
+
+        /* Visible focus ring — replaces outline:none anti-pattern */
+        :focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 3px;
+            border-radius: 6px;
+        }
+        :focus:not(:focus-visible) { outline: none; }
+
+        /* Respect user's motion preference */
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+
+        /* Ensure cursor-pointer on all interactive non-button elements */
+        .file-item, .roadmap-node, .roadmap-card,
+        .dropdown-item, .notif-item { cursor: pointer; }
+
         /* ==================== MATH / KATEX ==================== */
         .katex-display {
             background: rgba(99, 102, 241, 0.08);
@@ -2225,10 +2336,13 @@
                     <!-- Chat Tab -->
                     <!-- Home Tab -->
                     <div class="tab-content active" id="home-tab">
-                        <div style="padding:24px 8px;">
-                            <h2 id="home-greeting" style="margin-bottom:6px;font-size:1.5rem;">Welcome back! 👋</h2>
-                            <p id="home-subject-line" style="color:var(--text-secondary,#aaa);margin-bottom:24px;"></p>
-                            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px;margin-bottom:28px;">
+                        <div style="padding:40px 24px 32px;">
+                            <div style="margin-bottom:32px;">
+                                <div id="home-time-label" style="font-size:0.78rem;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--accent);margin-bottom:10px;"></div>
+                                <h2 id="home-greeting" style="font-family:'Syne',sans-serif;font-size:2.6rem;font-weight:800;letter-spacing:-0.03em;line-height:1.1;margin-bottom:10px;background:linear-gradient(120deg,var(--text) 0%,var(--primary-light) 70%,var(--accent) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">Welcome back! 👋</h2>
+                                <p id="home-subject-line" style="color:var(--text-muted);font-size:1.05rem;"></p>
+                            </div>
+                            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:14px;margin-bottom:32px;">
                                 <button class="home-action-card" onclick="switchToTab('chat')">
                                     <i class="fas fa-comments"></i>
                                     <span>Start Chat</span>
@@ -2246,18 +2360,21 @@
                                     <span>Upload PDF</span>
                                 </button>
                             </div>
-                            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
-                                <div style="background:var(--surface,#1e1e2e);border-radius:10px;padding:16px;text-align:center;">
-                                    <div style="font-size:1.6rem;font-weight:700;" id="home-docs">—</div>
-                                    <div style="font-size:0.8rem;color:var(--text-secondary,#aaa);">Documents</div>
+                            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;">
+                                <div style="background:var(--surface-2);border-radius:14px;padding:24px 16px;text-align:center;border:1px solid var(--border);position:relative;overflow:hidden;">
+                                    <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--accent),transparent);"></div>
+                                    <div style="font-family:'Syne',sans-serif;font-size:2.6rem;font-weight:800;color:var(--accent);line-height:1;" id="home-docs">—</div>
+                                    <div style="font-size:0.8rem;color:var(--text-muted);margin-top:8px;letter-spacing:0.06em;text-transform:uppercase;font-weight:600;">Documents</div>
                                 </div>
-                                <div style="background:var(--surface,#1e1e2e);border-radius:10px;padding:16px;text-align:center;">
-                                    <div style="font-size:1.6rem;font-weight:700;" id="home-msgs">—</div>
-                                    <div style="font-size:0.8rem;color:var(--text-secondary,#aaa);">Questions Asked</div>
+                                <div style="background:var(--surface-2);border-radius:14px;padding:24px 16px;text-align:center;border:1px solid var(--border);position:relative;overflow:hidden;">
+                                    <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--primary),transparent);"></div>
+                                    <div style="font-family:'Syne',sans-serif;font-size:2.6rem;font-weight:800;color:var(--primary-light);line-height:1;" id="home-msgs">—</div>
+                                    <div style="font-size:0.8rem;color:var(--text-muted);margin-top:8px;letter-spacing:0.06em;text-transform:uppercase;font-weight:600;">Questions Asked</div>
                                 </div>
-                                <div style="background:var(--surface,#1e1e2e);border-radius:10px;padding:16px;text-align:center;">
-                                    <div style="font-size:1.6rem;font-weight:700;" id="home-chunks">—</div>
-                                    <div style="font-size:0.8rem;color:var(--text-secondary,#aaa);">Knowledge Chunks</div>
+                                <div style="background:var(--surface-2);border-radius:14px;padding:24px 16px;text-align:center;border:1px solid var(--border);position:relative;overflow:hidden;">
+                                    <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,#818cf8,transparent);"></div>
+                                    <div style="font-family:'Syne',sans-serif;font-size:2.6rem;font-weight:800;color:#818cf8;line-height:1;" id="home-chunks">—</div>
+                                    <div style="font-size:0.8rem;color:var(--text-muted);margin-top:8px;letter-spacing:0.06em;text-transform:uppercase;font-weight:600;">Knowledge Chunks</div>
                                 </div>
                             </div>
                         </div>
@@ -2838,13 +2955,21 @@
         profileSetupSection.classList.remove('active');
         dashboardSection.classList.remove('active');
 
+        const siteHeader = document.querySelector('.header');
+
         if (name === 'auth') {
             authSection.classList.add('active');
+            if (siteHeader) siteHeader.classList.remove('hidden');
             window.startAuthBG && window.startAuthBG();
         } else {
             window.stopAuthBG && window.stopAuthBG();
-            if (name === 'profile-setup') profileSetupSection.classList.add('active');
-            else if (name === 'dashboard') dashboardSection.classList.add('active');
+            if (name === 'profile-setup') {
+                profileSetupSection.classList.add('active');
+                if (siteHeader) siteHeader.classList.remove('hidden');
+            } else if (name === 'dashboard') {
+                dashboardSection.classList.add('active');
+                if (siteHeader) siteHeader.classList.add('hidden');
+            }
         }
     }
 
@@ -2871,12 +2996,17 @@
         document.getElementById('profile-style').value = currentUser.learning_style || '';
         document.getElementById('profile-goals').value = currentUser.goals || '';
 
-        // Populate home tab greeting
+        // Populate home tab greeting with time-aware message
         const firstName = (currentUser.full_name || currentUser.username || 'Student').split(' ')[0];
         const subjectLabel = currentUser.subject || currentUser.current_subject || 'General';
         const homeGreeting = document.getElementById('home-greeting');
         const homeSubLine = document.getElementById('home-subject-line');
-        if (homeGreeting) homeGreeting.textContent = `Welcome back, ${firstName}! 👋`;
+        const homeTimeLabel = document.getElementById('home-time-label');
+        const hour = new Date().getHours();
+        const timeGreet = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+        const timeEmoji = hour < 12 ? '☀️' : hour < 17 ? '🌤️' : '🌙';
+        if (homeTimeLabel) homeTimeLabel.textContent = `${timeGreet} — ${new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}`;
+        if (homeGreeting) homeGreeting.textContent = `${timeGreet}, ${firstName}! ${timeEmoji}`;
         if (homeSubLine) homeSubLine.textContent = `Currently studying: ${subjectLabel}`;
 
         // Load stats (sidebar + home tab)
