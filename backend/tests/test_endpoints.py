@@ -55,14 +55,14 @@ def app_client(mock_db):
     """Import and return the FastAPI app with all external I/O mocked."""
     # Remove any previously cached app import so patches take effect cleanly
     for mod in list(sys.modules.keys()):
-        if mod == "app" or mod.startswith("app.") or mod in ("mongo", "core", "auth"):
+        if mod == "app" or mod.startswith("app.") or mod in ("core", "auth"):
             sys.modules.pop(mod, None)
 
     with patch("motor.motor_asyncio.AsyncIOMotorClient", return_value=MagicMock()), \
          patch("chromadb.PersistentClient"), \
-         patch("mongo.init_indexes", new=AsyncMock()):
-        import mongo
-        mongo.db = mock_db
+         patch("app.db.mongo.init_indexes", new=AsyncMock()):
+        import app.db.mongo as mongo_module
+        mongo_module.db = mock_db
 
         import app.main as app_module
         app_module.db = mock_db
@@ -96,7 +96,7 @@ def _fake_user(username="alice", email="alice@example.com"):
     oid = ObjectId()
     return {
         "_id": oid, "email": email, "username": username,
-        "full_name": None, "subject": None, "level": None,
+        "full_name": None, "level": None,
         "learning_style": None, "goals": None,
         "weak_topics": [], "strong_topics": [], "current_topic": None,
         "proficiency_score": 0, "engagement_score": 0,

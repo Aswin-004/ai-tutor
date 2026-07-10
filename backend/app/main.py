@@ -18,14 +18,16 @@ from slowapi.errors import RateLimitExceeded
 from bson import ObjectId
 from pypdf import PdfReader
 
-from mongo import db, init_indexes
-from auth import (
-    UserCreate, UserLogin, UserResponse, UserProfileUpdate, Token,
-    create_access_token, authenticate_user, create_user,
+from app.db.mongo import db, init_indexes
+from app.core.config import ACCESS_TOKEN_EXPIRE_MINUTES, ALLOWED_ORIGINS
+from app.core.security import create_access_token
+from app.schemas.auth import UserCreate, UserLogin, UserResponse, UserProfileUpdate, Token
+from app.services.auth_service import (
+    authenticate_user, create_user,
     get_user_by_email, get_user_by_username, update_user_profile,
-    change_user_password, get_current_active_user,
-    ACCESS_TOKEN_EXPIRE_MINUTES, mongo_user_to_response
+    change_user_password, mongo_user_to_response,
 )
+from app.dependencies.auth import get_current_active_user
 from core import LearningSystem, UserMemoryManager
 from analytics import (
     track,
@@ -74,13 +76,8 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS middleware — set ALLOWED_ORIGINS env var to comma-separated list for production
-_allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:8000,http://localhost:3000,http://localhost:5173")
-ALLOWED_ORIGINS = [o.strip() for o in _allowed_origins.split(",") if o.strip()]
-_IS_PRODUCTION = os.getenv("ENVIRONMENT", "development").lower() == "production"
-
-if _IS_PRODUCTION and any("localhost" in o for o in ALLOWED_ORIGINS):
-    raise ValueError("localhost must not be in ALLOWED_ORIGINS in production. Set ALLOWED_ORIGINS env var.")
-
+# (validated at import time in app.core.config: refuses to start with localhost
+# in ALLOWED_ORIGINS when ENVIRONMENT=production)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
