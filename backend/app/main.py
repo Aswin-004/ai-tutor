@@ -192,7 +192,7 @@ async def get_learning_session(user: dict) -> LearningSystem:
 
 # ==================== PUBLIC ENDPOINTS ====================
 
-_DIST_INDEX = Path(__file__).parent.parent / "frontend" / "dist" / "index.html"
+_DIST_INDEX = Path(__file__).parent.parent.parent / "frontend" / "dist" / "index.html"
 
 @app.get("/", response_class=HTMLResponse)
 async def serve_frontend():
@@ -202,7 +202,7 @@ async def serve_frontend():
 
 
 # Serve React static assets (JS/CSS/images) from the built dist folder
-_DIST_ASSETS = Path(__file__).parent.parent / "frontend" / "dist" / "assets"
+_DIST_ASSETS = Path(__file__).parent.parent.parent / "frontend" / "dist" / "assets"
 if _DIST_ASSETS.exists():
     app.mount("/assets", StaticFiles(directory=str(_DIST_ASSETS)), name="assets")
 
