@@ -25,6 +25,12 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440
 MONGO_URL = os.getenv("MONGO_URL", "mongodb://localhost:27017")
 MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "ai_tutor")
 
+# --- External API keys ---
+JINA_API_KEY = os.getenv("JINA_API_KEY")
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+if not JINA_API_KEY or not GOOGLE_API_KEY:
+    raise ValueError("Missing API Keys in .env file")
+
 # --- CORS ---
 _allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:8000,http://localhost:3000,http://localhost:5173")
 ALLOWED_ORIGINS = [o.strip() for o in _allowed_origins.split(",") if o.strip()]

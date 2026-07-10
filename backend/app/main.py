@@ -28,7 +28,8 @@ from app.services.auth_service import (
     change_user_password, mongo_user_to_response,
 )
 from app.dependencies.auth import get_current_active_user
-from core import LearningSystem, UserMemoryManager
+from app.services.learning_system import LearningSystem
+from app.services.user_memory import UserMemoryManager
 from analytics import (
     track,
     USER_SIGNED_UP, DOCUMENT_UPLOADED, QUESTION_ASKED,
@@ -941,7 +942,7 @@ async def transcribe_voice(
 
     import base64
     from google.genai import types as genai_types
-    from core import client as gemini_client
+    from app.services.ai_client import client as gemini_client
 
     audio_b64 = base64.b64encode(audio_bytes).decode()
 

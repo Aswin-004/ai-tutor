@@ -1,8 +1,10 @@
 """
-Unit tests for core.py — pure helper functions and mocked async methods.
+Unit tests for the learning_system/vector_db services — pure helper
+functions and mocked async methods.
 
-Pure functions (no I/O): _chunk_text, _parse_pages, _is_math_context,
-    should_generate_diagram, _resolve_tutor_mode.
+Pure functions (no I/O): _chunk_text, _parse_pages (vector_db),
+    _is_math_context, should_generate_diagram, _resolve_tutor_mode
+    (learning_system).
 
 Async with mocks: LearningSystem.generate_roadmap — mocks out Gemini
     (safe_generate) and ChromaDB so no real API calls are made.
@@ -11,9 +13,8 @@ import json
 import pytest
 from unittest.mock import AsyncMock, patch
 
-from core import (
-    _chunk_text,
-    _parse_pages,
+from app.services.vector_db import _chunk_text, _parse_pages
+from app.services.learning_system import (
     _is_math_context,
     should_generate_diagram,
     _resolve_tutor_mode,
@@ -182,8 +183,8 @@ def _patch_empty_vdb(system) -> None:
 async def test_generate_roadmap_returns_list():
     profile = {"level": "Beginner", "learning_style": "Visual", "subject": "Python"}
     with patch("chromadb.PersistentClient"), \
-         patch("core.safe_generate", new=AsyncMock(return_value=_make_roadmap_json(5, legacy_keys=False))), \
-         patch("core.get_jina_embeddings", new=AsyncMock(return_value=[])):
+         patch("app.services.learning_system.safe_generate", new=AsyncMock(return_value=_make_roadmap_json(5, legacy_keys=False))), \
+         patch("app.services.vector_db.get_jina_embeddings", new=AsyncMock(return_value=[])):
         system = LearningSystem(user_id=1, profile=profile)
         _patch_empty_vdb(system)
         result = await system.generate_roadmap()
@@ -198,8 +199,8 @@ async def test_generate_roadmap_normalizes_legacy_module_topic_keys():
     """A model response using the old module/topic keys should still map to title/description."""
     profile = {"level": "Beginner", "learning_style": "Visual", "subject": "Python"}
     with patch("chromadb.PersistentClient"), \
-         patch("core.safe_generate", new=AsyncMock(return_value=_make_roadmap_json(2, legacy_keys=True))), \
-         patch("core.get_jina_embeddings", new=AsyncMock(return_value=[])):
+         patch("app.services.learning_system.safe_generate", new=AsyncMock(return_value=_make_roadmap_json(2, legacy_keys=True))), \
+         patch("app.services.vector_db.get_jina_embeddings", new=AsyncMock(return_value=[])):
         system = LearningSystem(user_id=11, profile=profile)
         _patch_empty_vdb(system)
         result = await system.generate_roadmap()
@@ -213,7 +214,7 @@ async def test_generate_roadmap_normalizes_legacy_module_topic_keys():
 
 # ── detect_emotion ────────────────────────────────────────────────────────────
 
-from nlp_utils import detect_emotion
+from app.services.nlp import detect_emotion
 
 def test_emotion_frustrated():
     assert detect_emotion("i dont get this at all") == "frustrated"
@@ -244,8 +245,8 @@ async def test_generate_roadmap_beginner_gets_5_steps_in_prompt():
 
     profile = {"level": "Beginner", "learning_style": "Visual", "subject": "Python"}
     with patch("chromadb.PersistentClient"), \
-         patch("core.safe_generate", new=AsyncMock(side_effect=capture)), \
-         patch("core.get_jina_embeddings", new=AsyncMock(return_value=[])):
+         patch("app.services.learning_system.safe_generate", new=AsyncMock(side_effect=capture)), \
+         patch("app.services.vector_db.get_jina_embeddings", new=AsyncMock(return_value=[])):
         system = LearningSystem(user_id=2, profile=profile)
         _patch_empty_vdb(system)
         await system.generate_roadmap()
@@ -263,8 +264,8 @@ async def test_generate_roadmap_advanced_gets_9_steps_in_prompt():
 
     profile = {"level": "Advanced", "learning_style": "Reading", "subject": "ML"}
     with patch("chromadb.PersistentClient"), \
-         patch("core.safe_generate", new=AsyncMock(side_effect=capture)), \
-         patch("core.get_jina_embeddings", new=AsyncMock(return_value=[])):
+         patch("app.services.learning_system.safe_generate", new=AsyncMock(side_effect=capture)), \
+         patch("app.services.vector_db.get_jina_embeddings", new=AsyncMock(return_value=[])):
         system = LearningSystem(user_id=3, profile=profile)
         _patch_empty_vdb(system)
         await system.generate_roadmap()
@@ -282,8 +283,8 @@ async def test_generate_roadmap_practical_style_in_prompt():
 
     profile = {"level": "Intermediate", "learning_style": "Practical", "subject": "DSA"}
     with patch("chromadb.PersistentClient"), \
-         patch("core.safe_generate", new=AsyncMock(side_effect=capture)), \
-         patch("core.get_jina_embeddings", new=AsyncMock(return_value=[])):
+         patch("app.services.learning_system.safe_generate", new=AsyncMock(side_effect=capture)), \
+         patch("app.services.vector_db.get_jina_embeddings", new=AsyncMock(return_value=[])):
         system = LearningSystem(user_id=4, profile=profile)
         _patch_empty_vdb(system)
         await system.generate_roadmap()
@@ -301,8 +302,8 @@ async def test_generate_roadmap_includes_weak_topics_in_prompt():
 
     profile = {"level": "Intermediate", "learning_style": "Visual", "subject": "ML"}
     with patch("chromadb.PersistentClient"), \
-         patch("core.safe_generate", new=AsyncMock(side_effect=capture)), \
-         patch("core.get_jina_embeddings", new=AsyncMock(return_value=[])):
+         patch("app.services.learning_system.safe_generate", new=AsyncMock(side_effect=capture)), \
+         patch("app.services.vector_db.get_jina_embeddings", new=AsyncMock(return_value=[])):
         system = LearningSystem(user_id=5, profile=profile)
         _patch_empty_vdb(system)
         system.weak_topics = ["backpropagation", "gradient descent"]
@@ -313,12 +314,12 @@ async def test_generate_roadmap_includes_weak_topics_in_prompt():
 
 @pytest.mark.asyncio
 async def test_generate_roadmap_raises_on_ai_fallback():
-    from ai_service import AI_FALLBACK
+    from app.services.ai_client import AI_FALLBACK
 
     profile = {"level": "Intermediate", "learning_style": "Visual", "subject": "Python"}
     with patch("chromadb.PersistentClient"), \
-         patch("core.safe_generate", new=AsyncMock(return_value=AI_FALLBACK)), \
-         patch("core.get_jina_embeddings", new=AsyncMock(return_value=[])):
+         patch("app.services.learning_system.safe_generate", new=AsyncMock(return_value=AI_FALLBACK)), \
+         patch("app.services.vector_db.get_jina_embeddings", new=AsyncMock(return_value=[])):
         system = LearningSystem(user_id=6, profile=profile)
         _patch_empty_vdb(system)
         with pytest.raises(RuntimeError, match="AI service unavailable"):
@@ -329,8 +330,8 @@ async def test_generate_roadmap_raises_on_ai_fallback():
 async def test_generate_roadmap_raises_on_invalid_json():
     profile = {"level": "Intermediate", "learning_style": "Visual", "subject": "Python"}
     with patch("chromadb.PersistentClient"), \
-         patch("core.safe_generate", new=AsyncMock(return_value="not json at all")), \
-         patch("core.get_jina_embeddings", new=AsyncMock(return_value=[])):
+         patch("app.services.learning_system.safe_generate", new=AsyncMock(return_value="not json at all")), \
+         patch("app.services.vector_db.get_jina_embeddings", new=AsyncMock(return_value=[])):
         system = LearningSystem(user_id=7, profile=profile)
         _patch_empty_vdb(system)
         with pytest.raises(RuntimeError, match="invalid JSON"):
@@ -354,8 +355,8 @@ def _make_quiz_json(correct_key: str = "correct_answer", include_explanation: bo
 async def test_generate_quiz_returns_correct_answer_and_explanation():
     profile = {"level": "Intermediate", "learning_style": "Visual", "subject": "DSA"}
     with patch("chromadb.PersistentClient"), \
-         patch("core.safe_generate", new=AsyncMock(return_value=_make_quiz_json())), \
-         patch("core.get_jina_embeddings", new=AsyncMock(return_value=[])):
+         patch("app.services.learning_system.safe_generate", new=AsyncMock(return_value=_make_quiz_json())), \
+         patch("app.services.vector_db.get_jina_embeddings", new=AsyncMock(return_value=[])):
         system = LearningSystem(user_id=8, profile=profile)
         _patch_empty_vdb(system)
         quiz = await system.generate_quiz("recursion")
@@ -370,8 +371,8 @@ async def test_generate_quiz_normalizes_legacy_answer_key():
     profile = {"level": "Intermediate", "learning_style": "Visual", "subject": "DSA"}
     legacy_json = _make_quiz_json(correct_key="answer", include_explanation=False)
     with patch("chromadb.PersistentClient"), \
-         patch("core.safe_generate", new=AsyncMock(return_value=legacy_json)), \
-         patch("core.get_jina_embeddings", new=AsyncMock(return_value=[])):
+         patch("app.services.learning_system.safe_generate", new=AsyncMock(return_value=legacy_json)), \
+         patch("app.services.vector_db.get_jina_embeddings", new=AsyncMock(return_value=[])):
         system = LearningSystem(user_id=9, profile=profile)
         _patch_empty_vdb(system)
         quiz = await system.generate_quiz("recursion")
@@ -383,12 +384,12 @@ async def test_generate_quiz_normalizes_legacy_answer_key():
 
 @pytest.mark.asyncio
 async def test_generate_quiz_raises_on_ai_fallback():
-    from ai_service import AI_FALLBACK
+    from app.services.ai_client import AI_FALLBACK
 
     profile = {"level": "Intermediate", "learning_style": "Visual", "subject": "DSA"}
     with patch("chromadb.PersistentClient"), \
-         patch("core.safe_generate", new=AsyncMock(return_value=AI_FALLBACK)), \
-         patch("core.get_jina_embeddings", new=AsyncMock(return_value=[])):
+         patch("app.services.learning_system.safe_generate", new=AsyncMock(return_value=AI_FALLBACK)), \
+         patch("app.services.vector_db.get_jina_embeddings", new=AsyncMock(return_value=[])):
         system = LearningSystem(user_id=10, profile=profile)
         _patch_empty_vdb(system)
         with pytest.raises(RuntimeError, match="AI service unavailable"):
