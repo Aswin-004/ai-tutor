@@ -30,14 +30,14 @@ from app.services.auth_service import (
 from app.dependencies.auth import get_current_active_user
 from app.services.learning_system import LearningSystem
 from app.services.user_memory import UserMemoryManager
-from analytics import (
+from app.services.analytics_service import (
     track,
     USER_SIGNED_UP, DOCUMENT_UPLOADED, QUESTION_ASKED,
     QUIZ_COMPLETED, ROADMAP_GENERATED,
 )
-from scheduler import start_scheduler, stop_scheduler
-from decision_engine import decide_next_step
-from video_resources import get_video_recommendations
+from app.services.scheduler_service import start_scheduler, stop_scheduler
+from app.services.decision_engine import decide_next_step
+from app.services.video_resources import get_video_recommendations
 
 logging.basicConfig(
     level=logging.INFO,
