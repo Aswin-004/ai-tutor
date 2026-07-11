@@ -17,6 +17,10 @@ chroma_db/
 # Temp PDF files created during upload processing
 temp_*.pdf
 
+# Node / frontend
+node_modules/
+dist/
+
 # VS Code
 .vscode/
 
