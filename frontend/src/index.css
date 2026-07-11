@@ -1,0 +1,108 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+
+  html {
+    font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background-color: #070d1a;
+    color: #e2e8f0;
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Outfit', sans-serif;
+    line-height: 1.2;
+  }
+
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(129, 140, 248, 0.4);
+  }
+
+  ::selection {
+    background: rgba(129, 140, 248, 0.3);
+    color: #e2e8f0;
+  }
+}
+
+@layer components {
+  .glass {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    backdrop-filter: blur(12px);
+  }
+
+  .glass-hover {
+    @apply glass;
+    transition: background 0.2s, border-color 0.2s;
+  }
+
+  .glass-hover:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(129, 140, 248, 0.2);
+  }
+
+  .btn-primary {
+    @apply bg-accent text-white font-display font-medium rounded-xl px-5 py-2.5 text-sm;
+    @apply transition-all duration-200 hover:bg-[#9aa3fb] hover:shadow-[0_0_16px_rgba(129,140,248,0.4)];
+    @apply active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+
+  .btn-ghost {
+    @apply text-text-muted rounded-xl px-4 py-2 text-sm;
+    @apply transition-all duration-200 hover:bg-white/5 hover:text-text-base;
+    @apply active:scale-[0.98];
+  }
+
+  .input-base {
+    @apply w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-text-base;
+    @apply placeholder:text-text-subtle outline-none;
+    @apply transition-all duration-200;
+    @apply focus:border-accent/50 focus:bg-white/10 focus:shadow-[0_0_0_3px_rgba(129,140,248,0.1)];
+  }
+
+  .card {
+    @apply glass rounded-2xl p-5;
+  }
+
+  .shimmer {
+    background: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.03) 0%,
+      rgba(255, 255, 255, 0.07) 50%,
+      rgba(255, 255, 255, 0.03) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.8s infinite;
+  }
+
+  .page-content {
+    @apply p-6 max-w-5xl mx-auto;
+  }
+}
